@@ -2,7 +2,9 @@ name: Build iOS IPA
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -27,19 +29,28 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
-      - name: Build Xcode Project (Unsigned / Simulator Build)
+      - name: Build Xcode Project
         run: |
           cd ios/App
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -destination 'generic/platform=iOS Simulator' -archivePath build/App.xcarchive archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -archivePath build/App.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Create IPA
-  run: |
-    mkdir -p Payload
-    cp -R ios/App/build/App.xcarchive/Products/Applications/App.app Payload/
-    zip -r AnkiSync.ipa Payload
+        run: |
+          mkdir -p Payload
+          cp -R ios/App/build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -r AnkiSync.ipa Payload
 
-- name: Upload IPA
-  uses: actions/upload-artifact@v4
-  with:
-    name: AnkiSync-IPA
-    path: AnkiSync.ipa
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnkiSync-IPA
+          path: AnkiSync.ipa
