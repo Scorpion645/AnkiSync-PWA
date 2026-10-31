@@ -28,10 +28,15 @@ jobs:
           npx cap add ios || true
           npx cap sync ios
 
+      - name: Install CocoaPods Native Dependencies
+        run: |
+          cd ios/App
+          pod install
+          cd ../..
+
       - name: Build Device Archive
         run: |
           cd ios/App
-
           xcodebuild \
             -workspace App.xcworkspace \
             -scheme App \
