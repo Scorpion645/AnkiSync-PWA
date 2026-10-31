@@ -50,8 +50,7 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R ios/App/build/App.xcarchive/Products/Applications/App.app Payload/
-          cd Payload
-          zip -r ../AnkiSync.ipa .
+          zip -r AnkiSync.ipa Payload
           cd ..
 
       - name: Upload IPA
