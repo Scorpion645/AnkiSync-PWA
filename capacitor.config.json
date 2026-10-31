@@ -1,0 +1,6 @@
+{
+  "appId": "com.ankisync.app",
+  "appName": "AnkiSync",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
