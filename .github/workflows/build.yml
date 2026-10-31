@@ -9,7 +9,6 @@ on:
 
 jobs:
   build-ios:
-    name: Build iOS App on macOS
     runs-on: macos-latest
 
     steps:
@@ -26,28 +25,29 @@ jobs:
 
       - name: Initialize Capacitor iOS Platform
         run: |
-          npx cap add ios
+          npx cap add ios || true
           npx cap sync ios
 
-      - name: Build Xcode Project
+      - name: Build Device Archive
         run: |
           cd ios/App
+
           xcodebuild \
             -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'generic/platform=iOS' \
             -archivePath build/App.xcarchive \
             archive \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Create IPA
         run: |
           mkdir -p Payload
           cp -R ios/App/build/App.xcarchive/Products/Applications/App.app Payload/
-          zip -r AnkiSync.ipa Payload
+          cd Payload
+          zip -r ../AnkiSync.ipa .
+          cd ..
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
