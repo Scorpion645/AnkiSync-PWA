@@ -1,0 +1,3665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Anki Sync & Reader with IndexedDB Storage</title>
+  
+  <!-- CSS Frameworks & Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Anki & Zip Parsing Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sql.js@1.15.1/dist/sql-wasm-inline.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js"></script>
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+  <style>
+.anki-content {
+  word-break: break-word;
+  text-align: left !important;
+  width: 100%;
+  line-height: 1.6 !important;
+}
+
+.anki-content p {
+  margin: 0 0 8px 0;
+  line-height: 1.6 !important;
+}
+
+.anki-content ul, .editor-canvas ul {
+  list-style-type: disc !important;
+  margin-left: 24px !important;
+  padding-left: 12px !important;
+  text-align: inherit !important;
+}
+
+.anki-content ol, .editor-canvas ol {
+  list-style-type: decimal !important;
+  margin-left: 24px !important;
+  padding-left: 12px !important;
+  text-align: left !important;
+}
+
+.anki-content li, .editor-canvas li {
+  margin: 6px 0 !important;
+  text-align: left !important;
+  line-height: 1.5 !important;
+}
+
+
+
+
+.anki-content p {
+  margin: 0 0 8px 0;
+}
+
+/* Ensure paragraph blocks inside cards keep clean spacing */
+.anki-content p {
+  margin: 0 0 8px 0;
+}
+/* Apply list formatting to both the editor canvas and the rendered card view */
+.editor-canvas ul, .anki-content ul {
+  list-style-type: disc !important;
+  margin-left: 24px !important;
+  padding-left: 12px !important;
+  text-align: left !important;
+}
+
+.editor-canvas ol, .anki-content ol {
+  list-style-type: decimal !important;
+  margin-left: 24px !important;
+  padding-left: 12px !important;
+  text-align: left !important;
+}
+
+.editor-canvas li, .anki-content li {
+  margin: 4px 0 !important;
+  text-align: left !important;
+}
+.editor-canvas ul {
+  list-style-type: disc;
+  margin-left: 24px;
+  padding-left: 12px;
+}
+
+.editor-canvas ol {
+  list-style-type: decimal;
+  margin-left: 24px;
+  padding-left: 12px;
+}
+
+.editor-canvas li {
+  margin: 4px 0;
+}
+body.light-mode #decksGrid select {
+  background-color: #f1f5f9 !important;
+  color: #4f46e5 !important;
+  border-color: #cbd5e1 !important;
+}
+
+
+body.light-mode #view-decks button[onclick="promptCreateDeck()"] {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+  border: 1px solid #4f46e5 !important;
+}
+body.light-mode #view-decks button[onclick="promptCreateDeck()"]:hover {
+  background-color: #4338ca !important;
+}
+
+
+body.light-mode .color-palette-bar {
+      background-color: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+    }
+    :root {
+      --primary-color: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg-color: #0f172a;
+      --sidebar-bg: #1e293b;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+    }
+
+    .card-inner {
+      transition: transform 0.4s;
+      transform-style: preserve-3d;
+    }
+    .card-flipped {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      backface-visibility: hidden;
+    }
+    .card-back {
+      transform: rotateY(180deg);
+    }
+    .anki-content img {
+      height: auto;
+      margin: 8px auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      display: block;
+      max-width: 100%;
+    }
+   .anki-content {
+  word-break: break-word;
+}
+
+    /* Permanent Sidebar Deck Viewer Layout */
+    .deck-viewer-container {
+      display: flex;
+      height: calc(100vh - 180px);
+      min-height: 550px;
+      border-radius: 1.5rem;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      background: var(--card-bg);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      flex-shrink: 0;
+      background: #0f172a;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .sidebar-header {
+      padding: 16px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border-color);
+      background: #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .slide-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      overflow-y: auto;
+      flex-grow: 1;
+    }
+
+    .slide-item {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slide-item:hover {
+      background: #1e293b;
+    }
+
+    .slide-item.active {
+      background: rgba(79, 70, 229, 0.15);
+      border-left: 4px solid var(--primary-color);
+      font-weight: 600;
+      color: #818cf8;
+    }
+
+    .deck-main-content {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px;
+      overflow-y: auto;
+      background: var(--card-bg);
+    }
+
+    /* WYSIWYG Editable Canvas Styling */
+    .editor-canvas {
+  min-height: 120px;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  color: #f8fafc;
+  outline: none;
+  overflow-y: auto;
+  font-weight: normal; /* Forces all text inside editor canvases to be bold by default */
+}
+
+    .editor-canvas:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+
+    .editor-canvas img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.5rem;
+      margin: 6px 0;
+    }
+
+    .toolbar-btn {
+      padding: 4px 8px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #cbd5e1;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .toolbar-btn:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+
+    /* Interactive image controls in study and edit views */
+    .image-wrapper {
+      position: relative;
+      display: inline-block;
+      margin: 8px auto;
+    }
+
+    .image-actions {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      background: rgba(15, 23, 42, 0.9);
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      z-index: 10;
+    }
+
+    .image-wrapper:hover .image-actions {
+      opacity: 1;
+    }
+
+    /* Apple Pencil Sketch Canvas */
+    #sketchCanvas {
+      touch-action: none;
+      cursor: crosshair;
+      background: #0f172a;
+    }
+
+    body.zen-mode .deck-viewer-container {
+      height: calc(100vh - 40px);
+      border-radius: 0;
+      border: none;
+    }
+
+    /* Floating Toast Notification Styles */
+    #toastContainer {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast-message {
+      background: rgba(30, 41, 59, 0.95);
+      color: #f8fafc;
+      border: 1px solid #4f46e5;
+      padding: 10px 18px;
+      border-radius: 0.75rem;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      animation: slideInUp 0.2s ease, fadeOut 0.3s ease 1.2s forwards;
+      pointer-events: auto;
+    }
+    @keyframes slideInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; transform: translateY(-5px); }
+    }
+
+    /* Light Theme Variables & Overrides */
+    body.light-mode {
+      background-color: #f1f5f9 !important;
+      color: #0f172a !important;
+    }
+
+    body.light-mode header {
+      background-color: rgba(255, 255, 255, 0.9) !important;
+      border-color: #cbd5e1 !important;
+    }
+body.light-mode #appTabBar {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.light-mode .bg-slate-800 {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.light-mode .bg-slate-900 {
+      background-color: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.light-mode .bg-slate-700 {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.light-mode .sidebar {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+    }
+
+
+body.light-mode .sidebar-header {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+    body.light-mode .sidebar-header span {
+      color: #0f172a !important;
+    }
+
+    body.light-mode .sidebar-header button,
+    body.light-mode #sidebarPasteBtn {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1px solid #cbd5e1 !important;
+    }
+
+    body.light-mode .sidebar-header button:hover,
+    body.light-mode #sidebarPasteBtn:hover {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+
+
+
+    body.light-mode .sidebar-header button:hover,
+    body.light-mode #sidebarPasteBtn:hover {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }body.light-mode .slide-item {
+      border-bottom-color: #e2e8f0 !important;
+    }
+
+    body.light-mode .slide-item:hover {
+      background-color: #f1f5f9 !important;
+    }
+  body.light-mode .deck-viewer-container {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.light-mode .deck-main-content {
+      background-color: #ffffff !important;
+    }
+
+    body.light-mode #studyCard {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+   body.light-mode #cardBack {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+#backContent * {
+    text-align: inherit !important;
+}
+
+    
+body.light-mode #cardBack span {
+  border-color: inherit !important;
+}
+
+
+
+#backContent {
+    text-align: left !important;
+}
+
+/* Preserve bold formatting entered or pasted into the Add Card back editor. */
+#backContent b,
+#backContent strong {
+    font-weight: bold !important;
+}
+
+#backContent ul,
+#backContent ol {
+    display: block;
+    width: 100%;
+    margin-left: 0;
+    padding-left: 1.5rem;
+}
+
+#backContent li {
+    text-align: left;
+}
+
+#frontContent,
+#backContent {
+    width: 100%;
+    max-width: none;
+}
+
+    /* Target study top control bar and its child buttons/elements in light mode */
+    
+
+
+    /* Target study top control bar and container background in light mode */
+    body.light-mode #view-study > div:first-child {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+    body.light-mode #view-study > div:first-child.bg-slate-800\/60,
+    body.light-mode #view-study > div:first-child {
+      background-color: #ffffff !important;
+    }
+
+    body.light-mode #view-study > div:first-child button,
+    body.light-mode #view-study > div:first-child .bg-slate-700 {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1px solid #cbd5e1 !important;
+    }
+
+    body.light-mode #view-study > div:first-child button:hover,
+    body.light-mode #view-study > div:first-child .bg-slate-700:hover {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+
+
+body.light-mode #view-study > div:first-child button,
+    body.light-mode #view-study > div:first-child .bg-slate-700 {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1px solid #cbd5e1 !important;
+    }
+
+    body.light-mode #view-study > div:first-child button:hover,
+    body.light-mode #view-study > div:first-child .bg-slate-700:hover {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+
+    /* Target badge styles inside cards */
+    body.light-mode #cardTitleBadge {
+      background-color: #f1f5f9 !important;
+      color: #4f46e5 !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.light-mode .editor-canvas {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    body.light-mode input, 
+    body.light-mode select {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    /* Target formatting toolbars in edit/create modes */
+    body.light-mode .bg-slate-800 {
+      background-color: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    /* Target toolbar buttons */
+    body.light-mode .toolbar-btn {
+      background: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #334155 !important;
+    }
+
+    body.light-mode .toolbar-btn:hover {
+      background: #f1f5f9 !important;
+      color: #0f172a !important;
+    }
+
+    /* Target sidebar batch selection toolbar */
+    body.light-mode #sidebarBatchToolbar {
+      background-color: #f8fafc !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+
+    body.light-mode #sidebarBatchToolbar button {
+      background-color: #ffffff !important;
+      border: 1px solid #cbd5e1 !important;
+      color: #334155 !important;
+    }
+
+body.light-mode .text-slate-100,
+    body.light-mode .text-slate-200,
+    body.light-mode .text-slate-300,
+    body.light-mode .text-slate-400 {
+      color: #334155 !important;
+    }
+
+    /* Target the category filter container wrapper */
+    body.light-mode #view-decks > div:first-child {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+    }
+
+    /* Target unselected category filter buttons */
+    body.light-mode .cat-filter-btn:not(.bg-indigo-600) {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1px solid #cbd5e1 !important;
+    }
+
+    body.light-mode .cat-filter-btn:not(.bg-indigo-600):hover {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+/* Target theme toggle button in the header */
+    body.light-mode header button:first-of-type {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1px solid #cbd5e1 !important;
+    }
+
+    body.light-mode header button:first-of-type:hover {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+
+    /* Target the Local Mode / Sync Status badge in the header */
+    body.light-mode #syncStatus {
+      background-color: #f1f5f9 !important;
+      border-color: #cbd5e1 !important;
+      color: #334155 !important;
+    }
+
+    /* Target the "New Group" button in the filter bar */
+    body.light-mode #view-decks button[onclick="promptCreateCategory()"] {
+      background-color: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1px solid #cbd5e1 !important;
+    }
+
+    body.light-mode #view-decks button[onclick="promptCreateCategory()"]:hover {
+      background-color: #e2e8f0 !important;
+      color: #0f172a !important;
+    }
+    
+
+/* Focus Study Mode Styles (Step 2) */
+    .deck-viewer-container.focus-study-active .sidebar {
+      display: none !important;
+    }
+    .deck-viewer-container.focus-study-active {
+      border: none !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      height: auto !important;
+      min-height: unset !important;
+    }
+    .deck-viewer-container.focus-study-active .deck-main-content {
+      background: transparent !important;
+      padding: 0 !important;
+    }
+    /* Hide top study control header during focus mode to maximize card isolation */
+    body.focus-study-active #view-study > div:first-child {
+      display: none !important;
+    }
+    /* Focus Study Exit Bar Styling (Step 3) */
+    body.focus-study-active #focusExitBar {
+      display: flex !important;
+    }
+
+/* 1. Form Inputs: Default Front side inputs to bold, Back side inputs to normal */
+#modalCardFront, #createCardFront, #editCardFront {
+  font-weight: bold !important;
+}
+
+#modalCardBack, #createCardBack, #editCardBack {
+  font-weight: normal;
+}
+
+/* 2. Study View / Rendered Cards: Force Front content to be bold, let Back content follow its original text formatting */
+#frontContent, #frontContent * {
+  font-weight: bold !important;
+}
+
+#frontContent, #frontContent * {
+  font-weight: bold !important;
+}
+
+#backContent {
+  font-weight: normal;
+}
+
+
+</style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+  
+<!-- Header / Navigation -->
+  <header id="appHeader" class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-50 transition-all duration-300">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('decks')">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-layer-group text-white text-lg"></i>
+        </div>
+        <span class="font-bold text-lg tracking-wide bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">AnkiSync</span>
+      </div>
+
+      <!-- Right Side Controls (Light Mode, Save As, Local Mode) -->
+      <div class="flex items-center space-x-3">
+        <button onclick="toggleAppTheme()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow" title="Toggle Theme">
+          <i id="themeIcon" class="fa-solid fa-sun"></i>
+          <span id="themeText">Light Mode</span>
+        </button>
+
+        <button onclick="saveAllDecksToFile()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow" title="Export as .apkg Anki Package">
+          <i class="fa-solid fa-download"></i>
+          <span>Save As...</span>
+        </button>
+
+        <div id="syncStatus" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-700/50 border border-slate-600 text-slate-300">
+          <span id="syncDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="syncText">Local Mode</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 pb-24 transition-all duration-300" id="mainContainer">
+    
+    <!-- Tab Navigation Bar -->
+    <div id="appTabBar" class="flex bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700/60 mb-6 shadow-lg overflow-x-auto transition-all duration-300">
+      <button onclick="switchTab('decks')" id="tab-btn-decks" class="tab-btn flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-medium text-sm flex items-center justify-center space-x-2 transition-all duration-200 bg-indigo-600 text-white shadow">
+        <i class="fa-solid fa-book-open text-xs"></i>
+        <span>Decks</span>
+      </button>
+      <button onclick="switchTab('organizer')" id="tab-btn-organizer" class="tab-btn flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-medium text-sm flex items-center justify-center space-x-2 text-slate-400 hover:text-slate-200 transition-all duration-200">
+        <i class="fa-solid fa-folder-tree text-xs"></i>
+        <span>Organizer</span>
+      </button>
+      <button onclick="switchTab('create')" id="tab-btn-create" class="tab-btn flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-medium text-sm flex items-center justify-center space-x-2 text-slate-400 hover:text-slate-200 transition-all duration-200">
+        <i class="fa-solid fa-plus text-xs"></i>
+        <span>New Card</span>
+      </button>
+      <button onclick="switchTab('import')" id="tab-btn-import" class="tab-btn flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-medium text-sm flex items-center justify-center space-x-2 text-slate-400 hover:text-slate-200 transition-all duration-200">
+        <i class="fa-solid fa-file-import text-xs"></i>
+        <span>Import/Export</span>
+      </button>
+    </div>
+
+    <!-- VIEW 1: DECKS & STUDY HUB -->
+    <div id="view-decks" class="tab-view space-y-6">
+      <div class="flex items-center justify-between gap-4 flex-wrap bg-slate-800/40 p-3 rounded-2xl border border-slate-800">
+        <div class="flex items-center space-x-2 overflow-x-auto py-1 scrollbar-none" id="categoryFilterContainer">
+          <button onclick="filterCategory('ALL')" class="cat-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white shadow-sm transition">All Decks</button>
+        </div>
+        
+<div class="flex items-center space-x-2">
+          <button onclick="promptCreateDeck()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Deck</span>
+          </button>
+          <button onclick="promptCreateCategory()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-indigo-300 border border-slate-600 transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-folder-plus"></i>
+            <span>New Group</span>
+          </button>
+        </div>
+      </div>
+
+
+      <div id="decksGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      </div>
+      
+      <div id="emptyDecksNotice" class="hidden text-center py-16 bg-slate-800/30 rounded-3xl border border-dashed border-slate-700/60 p-6">
+        <div class="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-500 text-2xl">
+          <i class="fa-solid fa-box-open"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-300 mb-1">No Decks Found</h3>
+        <p class="text-sm text-slate-500 max-w-sm mx-auto mb-6">Import an Anki package (.apkg/.colpkg) or create your own custom card deck to get started.</p>
+        <button onclick="switchTab('import')" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm rounded-xl transition shadow-lg shadow-indigo-500/20">
+          Import Anki File
+        </button>
+      </div>
+    </div>
+
+  <!-- VIEW 2: STUDY MODE WITH SIDEBAR & CONTROLS -->
+    <div id="view-study" class="tab-view hidden space-y-4">
+      <div class="flex items-center justify-between bg-slate-800/60 p-4 rounded-2xl border border-slate-700 flex-wrap gap-2 transition-colors">
+        <button onclick="exitStudy()" class="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-2 transition">
+          <i class="fa-solid fa-arrow-left"></i>
+          <span>Back to Decks</span>
+        </button>
+        <div class="text-center">
+          <h2 id="studyDeckTitle" class="font-bold text-slate-200 text-base">Deck Title</h2>
+          <span id="studyProgressText" class="text-xs text-indigo-400 font-medium">Card 1 of 10</span>
+        </div>  
+
+<div class="flex items-center space-x-2">
+          <button onclick="stopStudySession()" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md" title="Save progress and show session summary">
+            <i class="fa-solid fa-stop"></i>
+            <span>Stop Here</span>
+          </button>
+          <!-- NEW STEP 1: Add "Study" Button Next to "Stop Here" -->
+          <button onclick="enterFocusStudyMode()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md" title="Enter Focus Study Mode">
+            <i class="fa-solid fa-graduation-cap"></i>
+            <span>Study</span>
+          </button>
+          <button onclick="openAddCardModal()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Card</span>
+          </button>
+
+        
+
+
+
+          <button onclick="toggleImmersiveMode()" id="immersiveBtn" class="px-3 py-1.5 bg-purple-600/80 hover:bg-purple-600 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md" title="Toggle Fullscreen">
+            <i class="fa-solid fa-expand"></i>
+            <span id="immersiveBtnText">Full Screen</span>
+          </button>
+          <button onclick="toggleEditCurrentCard()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>Edit Card</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Permanent Sidebar Slide List & Main Card Viewer Layout -->
+      <div class="deck-viewer-container">
+        
+        <!-- Permanent Side List of Cards with Multi-Select & Bulk Position Controls -->
+        <div class="sidebar">
+          <div class="sidebar-header flex flex-col space-y-2 !items-stretch">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <input type="checkbox" onchange="toggleSelectAllSidebarCards(this.checked)" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer" title="Select All Cards" />
+                <span class="text-xs font-bold text-slate-300">Cards in Deck</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span id="sidebarCardCount" class="text-xs font-normal text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">0</span>
+                <button onclick="pasteCardToActiveDeck()" id="sidebarPasteBtn" class="hidden text-xs text-indigo-400 hover:text-white px-2 py-0.5 bg-indigo-950 border border-indigo-800 rounded" title="Paste Copied Card">Paste</button>
+              </div>
+            </div>
+
+            <!-- Batch Move Action Toolbar for Selected Cards -->
+            <div id="sidebarBatchToolbar" class="hidden flex items-center justify-between bg-slate-900 px-2 py-1.5 rounded-lg border border-slate-700 text-xs">
+              <span id="sidebarSelectedCount" class="text-indigo-400 font-bold">0 selected</span>
+              <div class="flex items-center space-x-1">
+                <button onclick="moveSelectedSidebarCards('top')" class="p-1 px-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" title="Move to Top"><i class="fa-solid fa-angles-up"></i></button>
+                <button onclick="moveSelectedSidebarCards(-1)" class="p-1 px-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" title="Move Up"><i class="fa-solid fa-chevron-up"></i></button>
+                <button onclick="moveSelectedSidebarCards(1)" class="p-1 px-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" title="Move Down"><i class="fa-solid fa-chevron-down"></i></button>
+                <button onclick="moveSelectedSidebarCards('bottom')" class="p-1 px-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" title="Move to Bottom"><i class="fa-solid fa-angles-down"></i></button>
+              </div>
+            </div>
+          </div>
+          <ul id="slide-list" class="slide-list">
+          </ul>
+        </div>
+
+
+<!-- Main Viewing and Editing Workspace -->
+        <div class="deck-main-content">
+          
+          <!-- View Card State -->
+          <div id="studyViewMode" class="flex-1 flex flex-col justify-between">
+            <!-- NEW STEP 3: Exit Study Mode Button (Visible only during Focus Study) -->
+            <div id="focusExitBar" class="hidden mb-4 flex justify-between items-center">
+              <button onclick="exitFocusStudyMode()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center space-x-2 border border-slate-700 shadow-md transition">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Exit Study Mode</span>
+              </button>
+            </div>
+
+            <div class="perspective-1000 min-h-[300px] w-full relative my-auto">
+
+
+       
+              <div id="studyCard" onclick="flipCard()" class="card-inner w-full min-h-[300px] cursor-pointer relative rounded-2xl bg-slate-800/90 border border-slate-700 shadow-xl p-6 flex flex-col justify-between">
+                
+                <!-- Front Side -->
+                <div id="cardFront" class="card-front w-full flex-1 flex flex-col items-center justify-center text-center space-y-4">
+                  <span id="cardTitleBadge" class="text-[10px] font-bold tracking-wider uppercase text-slate-400 bg-slate-900/80 px-2.5 py-1 rounded-full border border-slate-700">QUESTION</span>
+                  <div id="frontContent" class="anki-content text-base md:text-lg text-slate-100 max-w-xl overflow-y-auto max-h-[260px] w-full">
+</div>
+                </div>
+
+                <!-- Back Side -->
+                <div id="cardBack" class="card-back absolute inset-0 p-6 w-full h-full flex flex-col items-center justify-center text-center space-y-4 bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+                  <span class="text-[10px] font-bold tracking-wider uppercase text-indigo-400 bg-indigo-950/80 px-2.5 py-1 rounded-full border border-indigo-800/50">ANSWER</span>
+                  <div id="backContent" class="anki-content text-base md:text-lg text-slate-100 max-w-xl overflow-y-auto max-h-[260px] w-full">
+</div>
+                </div>
+                
+                <div class="text-center text-[11px] text-slate-500 mt-2">
+                  <i class="fa-solid fa-hand-pointer mr-1"></i> Tap card to flip
+                </div>
+              </div>
+            </div>
+
+            <!-- SRS Rating Controls -->
+            <div id="srsControls" class="grid grid-cols-4 gap-2 pt-4">
+              <button onclick="rateCard(1)" class="py-2.5 px-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 rounded-xl font-semibold text-xs flex flex-col items-center space-y-0.5 transition">
+                <span>Again</span>
+                <span class="text-[9px] text-rose-400/70 font-normal">&lt; 1m</span>
+              </button>
+              <button onclick="rateCard(2)" class="py-2.5 px-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl font-semibold text-xs flex flex-col items-center space-y-0.5 transition">
+                <span>Hard</span>
+                <span class="text-[9px] text-amber-400/70 font-normal">10m</span>
+              </button>
+              <button onclick="rateCard(3)" class="py-2.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 rounded-xl font-semibold text-xs flex flex-col items-center space-y-0.5 transition">
+                <span>Good</span>
+                <span class="text-[9px] text-emerald-400/70 font-normal">1d</span>
+              </button>
+              <button onclick="rateCard(4)" class="py-2.5 px-2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-xl font-semibold text-xs flex flex-col items-center space-y-0.5 transition">
+                <span>Easy</span>
+                <span class="text-[9px] text-indigo-400/70 font-normal">4d</span>
+              </button>
+            </div>
+          </div>
+
+          
+
+<!-- Rich-Text & Media Interactive Edit Mode (Exact match to Add Card modal) -->
+          <div id="studyEditMode" class="hidden flex-1 flex flex-col justify-between space-y-4">
+            <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              <h3 class="text-sm font-bold text-slate-300 border-b border-slate-700 pb-2 flex items-center space-x-2">
+                <i class="fa-solid fa-pen text-indigo-400"></i>
+                <span>Edit Flashcard</span>
+              </h3>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-400 mb-1">Card Title (Optional - Shows in Sidebar)</label>
+                <input type="text" id="editCardTitleInput" placeholder="e.g. Heart Murmurs" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+              </div>
+
+              <!-- Front Editor -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-semibold text-slate-400">Front (Question / Prompt)</label>
+                  <button type="button" onclick="openSketchModal('editCardFront')" class="text-purple-400 hover:underline text-xs flex items-center gap-1">
+                    <i class="fa-solid fa-pencil"></i> Apple Pencil Sketch
+                  </button>
+                </div>
+                <div class="flex flex-wrap gap-1 bg-slate-800 p-1.5 rounded-lg border border-slate-700 mb-1 items-center">
+                  <button type="button" onclick="execCmd('bold', 'editCardFront')" class="toolbar-btn" title="Bold"><i class="fa-solid fa-bold"></i></button>
+                  <button type="button" onclick="execCmd('italic', 'editCardFront')" class="toolbar-btn" title="Italic"><i class="fa-solid fa-italic"></i></button>
+                  <button type="button" onclick="execCmd('underline', 'editCardFront')" class="toolbar-btn" title="Underline"><i class="fa-solid fa-underline"></i></button>
+                  <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+                  <select onchange="execCmd('fontSize', 'editCardFront', this.value); this.selectedIndex=0;" class="bg-slate-900 border border-slate-700 text-[11px] rounded px-1 text-slate-300 outline-none h-7">
+                    <option value="" disabled selected>Size</option>
+                    <option value="1">Small (1)</option>
+                    <option value="3">Normal (3)</option>
+                    <option value="5">Large (5)</option>
+                    <option value="7">Huge (7)</option>
+                  </select>
+                  <div class="color-palette-bar flex items-center space-x-1 px-1 bg-slate-900/50 rounded-lg border border-slate-700/60 py-0.5">
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#000000')" class="w-4 h-4 rounded-full bg-black border border-slate-600 hover:scale-110 transition" title="Black"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 border border-slate-600 hover:scale-110 transition" title="Red"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 border border-slate-600 hover:scale-110 transition" title="Blue"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 border border-slate-600 hover:scale-110 transition" title="Yellow"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 border border-slate-600 hover:scale-110 transition" title="Green"></button>
+                  </div>
+                  <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+                  <button type="button" onclick="execCmd('justifyLeft', 'editCardFront')" class="toolbar-btn" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
+                  <button type="button" onclick="execCmd('justifyCenter', 'editCardFront')" class="toolbar-btn" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
+                  <button type="button" onclick="execCmd('justifyRight', 'editCardFront')" class="toolbar-btn" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
+                  <button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList', 'editCardFront')" class="toolbar-btn" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+                  <button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertOrderedList', 'editCardFront')" class="toolbar-btn" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+                  <button type="button" onclick="execCmd('removeFormat', 'editCardFront')" class="toolbar-btn" title="Clear Formatting"><i class="fa-solid fa-eraser"></i></button>
+                </div>
+                <div id="editCardFront" contenteditable="true" class="editor-canvas !min-h-[80px]"></div>
+              </div>
+
+              <!-- Back Editor -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="block text-xs font-semibold text-slate-400">Back (Answer / Description)</label>
+                  <div class="flex items-center space-x-3 text-xs">
+                    <button type="button" onclick="openSketchModal('editCardBack')" class="text-purple-400 hover:underline flex items-center gap-1">
+                      <i class="fa-solid fa-pencil"></i> Apple Pencil Sketch
+                    </button>
+                    <label class="text-indigo-400 hover:underline cursor-pointer flex items-center gap-1">
+                      <i class="fa-solid fa-image"></i> Add Image
+                      <input type="file" accept="image/*" class="hidden" onchange="insertImageToEditor(event, 'editCardBack')" />
+                    </label>
+                    <label class="text-emerald-400 hover:underline cursor-pointer flex items-center gap-1">
+                      <i class="fa-solid fa-file-audio"></i> Upload Audio
+                      <input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac" class="hidden" onchange="insertAudioFileToEditor(event, 'editCardBack')" />
+                    </label>
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-1 bg-slate-800 p-1.5 rounded-lg border border-slate-700 mb-1 items-center">
+                  <button type="button" onclick="execCmd('bold', 'editCardBack')" class="toolbar-btn" title="Bold"><i class="fa-solid fa-bold"></i></button>
+                  <button type="button" onclick="execCmd('italic', 'editCardBack')" class="toolbar-btn" title="Italic"><i class="fa-solid fa-italic"></i></button>
+                  <button type="button" onclick="execCmd('underline', 'editCardBack')" class="toolbar-btn" title="Underline"><i class="fa-solid fa-underline"></i></button>
+                  <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+                  <select onchange="execCmd('fontSize', 'editCardBack', this.value); this.selectedIndex=0;" class="bg-slate-900 border border-slate-700 text-[11px] rounded px-1 text-slate-300 outline-none h-7">
+                    <option value="" disabled selected>Size</option>
+                    <option value="1">Small (1)</option>
+                    <option value="3">Normal (3)</option>
+                    <option value="5">Large (5)</option>
+                    <option value="7">Huge (7)</option>
+                  </select>
+                  <div class="color-palette-bar flex items-center space-x-1 px-1 bg-slate-900/50 rounded-lg border border-slate-700/60 py-0.5">
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#000000')" class="w-4 h-4 rounded-full bg-black border border-slate-600 hover:scale-110 transition" title="Black"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 border border-slate-600 hover:scale-110 transition" title="Red"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 border border-slate-600 hover:scale-110 transition" title="Blue"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 border border-slate-600 hover:scale-110 transition" title="Yellow"></button>
+                    <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 border border-slate-600 hover:scale-110 transition" title="Green"></button>
+                  </div>
+                  <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+                  <button type="button" onclick="execCmd('justifyLeft', 'editCardBack')" class="toolbar-btn" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
+                  <button type="button" onclick="execCmd('justifyCenter', 'editCardBack')" class="toolbar-btn" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
+                  <button type="button" onclick="execCmd('justifyRight', 'editCardBack')" class="toolbar-btn" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
+                  <button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList', 'editCardBack')" class="toolbar-btn" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+                  <button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertOrderedList', 'editCardBack')" class="toolbar-btn" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+                  <button type="button" onclick="execCmd('removeFormat', 'editCardBack')" class="toolbar-btn" title="Clear Formatting"><i class="fa-solid fa-eraser"></i></button>
+                </div>
+                <div id="editCardBack" contenteditable="true" class="editor-canvas !min-h-[80px]"></div>
+              </div>
+            </div>
+
+            <div class="flex space-x-3 pt-2">
+              <button onclick="saveCardEdits()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition shadow-md">
+                Save Changes
+              </button>
+              <button onclick="toggleEditCurrentCard()" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-xs font-semibold transition">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+
+
+          <!-- Bottom Navigation Controls -->
+          <div class="flex justify-between items-center pt-4 border-t border-slate-700/60 mt-4">
+            <button onclick="prevCard()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-chevron-left"></i>
+              <span>Previous</span>
+            </button>
+            <button onclick="nextCard()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5">
+              <span>Next</span>
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: ORGANIZER -->
+    <div id="view-organizer" class="tab-view hidden space-y-6">
+      <div class="bg-slate-800 p-5 rounded-3xl border border-slate-700 shadow-xl space-y-4">
+        <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+          <i class="fa-solid fa-folder-tree text-indigo-400"></i>
+          <span>Card & Deck Organizer</span>
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Filter Source Deck</label>
+            <select id="organizerSourceDeck" onchange="renderOrganizerCards()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="ALL">All Decks</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Target Destination Deck</label>
+            <select id="organizerTargetDeck" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </select>
+          </div>
+          <div class="flex items-end">
+            <button onclick="moveSelectedCards()" class="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-500/20">
+              <i class="fa-solid fa-arrow-right-arrow-left"></i>
+              <span>Move Selected Cards</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-800 rounded-3xl border border-slate-700 overflow-hidden shadow-xl">
+        <div class="p-4 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <input type="checkbox" id="selectAllCards" onchange="toggleSelectAllCards(this.checked)" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer" />
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Select All</span>
+          </div>
+          <span id="selectedCardCount" class="text-xs font-medium text-indigo-400">0 Cards Selected</span>
+        </div>
+
+        <div id="organizerCardList" class="divide-y divide-slate-700/60 max-h-[500px] overflow-y-auto">
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 4: CREATE NEW CARD -->
+    <div id="view-create" class="tab-view hidden space-y-6">
+      <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl max-w-2xl mx-auto space-y-6">
+        <div class="border-b border-slate-700 pb-4">
+          <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-plus-circle text-indigo-400"></i>
+            <span>Create New Flashcard</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Add rich text, titles, resizable photos, and Apple Pencil annotations.</p>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Target Deck</label>
+            <select id="createCardDeck" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Card Title (Optional - Shows in Sidebar)</label>
+            <input type="text" id="createCardTitle" placeholder="e.g. Anterior Cruciate Ligament Tear" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <!-- Front Editor -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <label class="block text-xs font-semibold text-slate-400">Front (Question / Prompt)</label>
+              <div class="flex items-center space-x-3 text-xs">
+                <button type="button" onclick="openSketchModal('createCardFront')" class="text-purple-400 hover:underline flex items-center gap-1">
+                  <i class="fa-solid fa-pencil"></i> Apple Pencil Sketch
+                </button>
+                <label class="text-indigo-400 hover:underline cursor-pointer flex items-center gap-1">
+                  <i class="fa-solid fa-image"></i> Add Image
+                  <input type="file" accept="image/*" class="hidden" onchange="insertImageToEditor(event, 'createCardFront')" />
+                </label>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1 bg-slate-800 p-1.5 rounded-lg border border-slate-700 items-center">
+              <button type="button" onclick="execCmd('bold', 'createCardFront')" class="toolbar-btn" title="Bold"><i class="fa-solid fa-bold"></i></button>
+              <button type="button" onclick="execCmd('italic', 'createCardFront')" class="toolbar-btn" title="Italic"><i class="fa-solid fa-italic"></i></button>
+              <button type="button" onclick="execCmd('underline', 'createCardFront')" class="toolbar-btn" title="Underline"><i class="fa-solid fa-underline"></i></button>
+              <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+              <select onchange="execCmd('fontSize', 'createCardFront', this.value); this.selectedIndex=0;" class="bg-slate-900 border border-slate-700 text-[11px] rounded px-1 text-slate-300 outline-none h-7">
+                <option value="" disabled selected>Size</option>
+                <option value="1">Small (1)</option>
+                <option value="3">Normal (3)</option>
+                <option value="5">Large (5)</option>
+                <option value="7">Huge (7)</option>
+              </select>
+              
+<div class="color-palette-bar flex items-center space-x-1 px-1 bg-slate-900/50 rounded-lg border border-slate-700/60 py-0.5">
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#000000')" class="w-4 h-4 rounded-full bg-black border border-slate-600 hover:scale-110 transition" title="Black"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 border border-slate-600 hover:scale-110 transition" title="Red"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 border border-slate-600 hover:scale-110 transition" title="Blue"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 border border-slate-600 hover:scale-110 transition" title="Yellow"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 border border-slate-600 hover:scale-110 transition" title="Green"></button>
+              </div>             
+
+ <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+              <button type="button" onclick="execCmd('justifyLeft', 'createCardFront')" class="toolbar-btn" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
+              <button type="button" onclick="execCmd('justifyCenter', 'createCardFront')" class="toolbar-btn" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
+              <button type="button" onclick="execCmd('justifyRight', 'createCardFront')" class="toolbar-btn" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
+             
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList', 'createCardFront')" class="toolbar-btn" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertOrderedList', 'createCardFront')" class="toolbar-btn" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+
+
+
+              <button type="button" onclick="execCmd('removeFormat', 'createCardFront')" class="toolbar-btn" title="Clear Formatting"><i class="fa-solid fa-eraser"></i></button>
+            </div>
+            
+<div id="createCardFront" contenteditable="true" class="editor-canvas" style="font-weight: bold;"><span style="font-weight: bold;"><br></span></div>
+          </div>
+
+          <!-- Back Editor -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <label class="block text-xs font-semibold text-slate-400">Back (Answer / Description)</label>
+              <div class="flex items-center space-x-3 text-xs">
+                <button type="button" onclick="openSketchModal('createCardBack')" class="text-purple-400 hover:underline flex items-center gap-1">
+                  <i class="fa-solid fa-pencil"></i> Apple Pencil Sketch
+                </button>
+                <label class="text-indigo-400 hover:underline cursor-pointer flex items-center gap-1">
+                  <i class="fa-solid fa-image"></i> Add Image
+                  <input type="file" accept="image/*" class="hidden" onchange="insertImageToEditor(event, 'createCardBack')" />
+                </label>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1 bg-slate-800 p-1.5 rounded-lg border border-slate-700 items-center">
+              <button type="button" onclick="execCmd('bold', 'createCardBack')" class="toolbar-btn" title="Bold"><i class="fa-solid fa-bold"></i></button>
+              <button type="button" onclick="execCmd('italic', 'createCardBack')" class="toolbar-btn" title="Italic"><i class="fa-solid fa-italic"></i></button>
+              <button type="button" onclick="execCmd('underline', 'createCardBack')" class="toolbar-btn" title="Underline"><i class="fa-solid fa-underline"></i></button>
+              <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+              <select onchange="execCmd('fontSize', 'createCardBack', this.value); this.selectedIndex=0;" class="bg-slate-900 border border-slate-700 text-[11px] rounded px-1 text-slate-300 outline-none h-7">
+                <option value="" disabled selected>Size</option>
+                <option value="1">Small (1)</option>
+                <option value="3">Normal (3)</option>
+                <option value="5">Large (5)</option>
+                <option value="7">Huge (7)</option>
+              </select>
+              
+<div class="color-palette-bar flex items-center space-x-1 px-1 bg-slate-900/50 rounded-lg border border-slate-700/60 py-0.5">
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#000000')" class="w-4 h-4 rounded-full bg-black border border-slate-600 hover:scale-110 transition" title="Black"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 border border-slate-600 hover:scale-110 transition" title="Red"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 border border-slate-600 hover:scale-110 transition" title="Blue"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 border border-slate-600 hover:scale-110 transition" title="Yellow"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 border border-slate-600 hover:scale-110 transition" title="Green"></button>
+              </div>
+              <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+              <button type="button" onclick="execCmd('justifyLeft', 'createCardBack')" class="toolbar-btn" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
+              <button type="button" onclick="execCmd('justifyCenter', 'createCardBack')" class="toolbar-btn" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
+              <button type="button" onclick="execCmd('justifyRight', 'createCardBack')" class="toolbar-btn" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
+
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList', 'createCardBack')" class="toolbar-btn" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertOrderedList', 'createCardBack')" class="toolbar-btn" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+
+
+              <button type="button" onclick="execCmd('removeFormat', 'createCardBack')" class="toolbar-btn" title="Clear Formatting"><i class="fa-solid fa-eraser"></i></button>
+            </div>
+            <div id="createCardBack" contenteditable="true" class="editor-canvas"></div>
+          </div>
+
+          <button onclick="saveNewCard()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition shadow-lg shadow-indigo-500/25 flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Save Flashcard</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 5: IMPORT / EXPORT -->
+    <div id="view-import" class="tab-view hidden space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <i class="fa-solid fa-file-arrow-up text-lg"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-white">Import Anki Deck (.apkg / .colpkg)</h3>
+              <p class="text-xs text-slate-400">Supports legacy and modern Anki v3 compressed formats</p>
+            </div>
+          </div>
+
+          <div class="border-2 border-dashed border-slate-700 rounded-2xl p-6 text-center hover:border-indigo-500 transition cursor-pointer relative" id="dropZone">
+            <input type="file" id="ankiFileInput" accept=".apkg,.colpkg" onchange="handleAnkiFileUpload(event)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+            <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-500 mb-2"></i>
+            <p class="text-sm font-semibold text-slate-300">Click or Drag Anki file here</p>
+            <p class="text-xs text-slate-500 mt-1">.apkg or .colpkg files</p>
+          </div>
+
+          <div id="importProgress" class="hidden space-y-2">
+            <div class="flex justify-between text-xs font-semibold text-slate-400">
+              <span id="importStatusText">Parsing Anki Package...</span>
+              <span id="importPercent">0%</span>
+            </div>
+            <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden">
+              <div id="importProgressBar" class="bg-indigo-500 h-full w-0 transition-all duration-200"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <i class="fa-solid fa-arrows-rotate text-lg"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-white">Cross-Device Synchronization</h3>
+              <p class="text-xs text-slate-400">Connect Firebase for instant sync between PC & iPhone</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 mb-1">Sync Group Code / User Key</label>
+              <div class="flex space-x-2">
+                <input type="text" id="syncUserKey" placeholder="e.g. my-anki-deck-sync-123" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+                <button onclick="connectFirebaseSync()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl transition shadow-lg shadow-emerald-600/20">
+                  Connect
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              Enter the exact same Sync Group Code on your PC and iPhone to share decks, review history, and images instantly.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Hidden Replacement Input -->
+    <input type="file" id="imageReplaceInput" accept="image/*" class="hidden" onchange="processImageReplacement(event)" />
+
+  </main>
+
+  <!-- QUICK ADD CARD MODAL -->
+  <div id="quickAddModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+        <h3 class="font-bold text-white text-base flex items-center space-x-2">
+          <i class="fa-solid fa-plus-circle text-indigo-400"></i>
+          <span>Add Card to Active Deck</span>
+        </h3>
+        <button onclick="closeAddCardModal()" class="text-slate-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Card Title (Optional - Shows in Sidebar)</label>
+          <input type="text" id="modalCardTitle" placeholder="e.g. Heart Murmurs" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" />
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-400">Front (Question / Prompt)</label>
+            <button type="button" onclick="openSketchModal('modalCardFront')" class="text-purple-400 hover:underline text-xs flex items-center gap-1">
+              <i class="fa-solid fa-pencil"></i> Apple Pencil Sketch
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-1 bg-slate-800 p-1.5 rounded-lg border border-slate-700 mb-1 items-center">
+            <button type="button" onclick="execCmd('bold', 'modalCardFront')" class="toolbar-btn" title="Bold"><i class="fa-solid fa-bold"></i></button>
+            <button type="button" onclick="execCmd('italic', 'modalCardFront')" class="toolbar-btn" title="Italic"><i class="fa-solid fa-italic"></i></button>
+            <button type="button" onclick="execCmd('underline', 'modalCardFront')" class="toolbar-btn" title="Underline"><i class="fa-solid fa-underline"></i></button>
+            <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+            <select onchange="execCmd('fontSize', 'modalCardFront', this.value); this.selectedIndex=0;" class="bg-slate-900 border border-slate-700 text-[11px] rounded px-1 text-slate-300 outline-none h-7">
+              <option value="" disabled selected>Size</option>
+              <option value="1">Small (1)</option>
+              <option value="3">Normal (3)</option>
+              <option value="5">Large (5)</option>
+              <option value="7">Huge (7)</option>
+            </select>
+            
+<div class="color-palette-bar flex items-center space-x-1 px-1 bg-slate-900/50 rounded-lg border border-slate-700/60 py-0.5">
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#000000')" class="w-4 h-4 rounded-full bg-black border border-slate-600 hover:scale-110 transition" title="Black"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 border border-slate-600 hover:scale-110 transition" title="Red"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 border border-slate-600 hover:scale-110 transition" title="Blue"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 border border-slate-600 hover:scale-110 transition" title="Yellow"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 border border-slate-600 hover:scale-110 transition" title="Green"></button>
+              </div>
+
+            <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+            <button type="button" onclick="execCmd('justifyLeft', 'modalCardFront')" class="toolbar-btn" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
+            <button type="button" onclick="execCmd('justifyCenter', 'modalCardFront')" class="toolbar-btn" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
+            <button type="button" onclick="execCmd('justifyRight', 'modalCardFront')" class="toolbar-btn" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
+
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList', 'modalCardFront')" class="toolbar-btn" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertOrderedList', 'modalCardFront')" class="toolbar-btn" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+
+
+            <button type="button" onclick="execCmd('removeFormat', 'modalCardFront')" class="toolbar-btn" title="Clear Formatting"><i class="fa-solid fa-eraser"></i></button>
+          </div>
+<div id="modalCardFront" contenteditable="true" class="editor-canvas !min-h-[80px]" style="font-weight: bold;"></div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-400">Back (Answer / Description)</label>
+            <div class="flex items-center space-x-3 text-xs">
+              <button type="button" onclick="openSketchModal('modalCardBack')" class="text-purple-400 hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-pencil"></i> Apple Pencil Sketch
+              </button>
+              <label class="text-indigo-400 hover:underline cursor-pointer flex items-center gap-1">
+                <i class="fa-solid fa-image"></i> Add Image
+                <input type="file" accept="image/*" class="hidden" onchange="insertImageToEditor(event, 'modalCardBack')" />
+              </label>
+              <label class="text-emerald-400 hover:underline cursor-pointer flex items-center gap-1">
+                <i class="fa-solid fa-file-audio"></i> Upload Audio
+                <input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac" class="hidden" onchange="insertAudioFileToEditor(event, 'modalCardBack')" />
+              </label>
+              <button type="button" id="recordBackAudioBtn" onclick="toggleBackAudioRecording()" class="text-rose-400 hover:underline flex items-center gap-1" title="Record audio for the back of this card">
+                <i class="fa-solid fa-microphone"></i> <span>Record Audio</span>
+              </button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-1 bg-slate-800 p-1.5 rounded-lg border border-slate-700 mb-1 items-center">
+            <button type="button" onclick="execCmd('bold', 'modalCardBack')" class="toolbar-btn" title="Bold"><i class="fa-solid fa-bold"></i></button>
+            <button type="button" onclick="execCmd('italic', 'modalCardBack')" class="toolbar-btn" title="Italic"><i class="fa-solid fa-italic"></i></button>
+            <button type="button" onclick="execCmd('underline', 'modalCardBack')" class="toolbar-btn" title="Underline"><i class="fa-solid fa-underline"></i></button>
+            <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+            <select onchange="execCmd('fontSize', 'modalCardBack', this.value); this.selectedIndex=0;" class="bg-slate-900 border border-slate-700 text-[11px] rounded px-1 text-slate-300 outline-none h-7">
+              <option value="" disabled selected>Size</option>
+              <option value="1">Small (1)</option>
+              <option value="3">Normal (3)</option>
+              <option value="5">Large (5)</option>
+              <option value="7">Huge (7)</option>
+            </select>
+            
+<div class="color-palette-bar flex items-center space-x-1 px-1 bg-slate-900/50 rounded-lg border border-slate-700/60 py-0.5">
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#000000')" class="w-4 h-4 rounded-full bg-black border border-slate-600 hover:scale-110 transition" title="Black"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 border border-slate-600 hover:scale-110 transition" title="Red"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 border border-slate-600 hover:scale-110 transition" title="Blue"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 border border-slate-600 hover:scale-110 transition" title="Yellow"></button>
+                <button type="button" onmousedown="event.preventDefault()" onclick="applyColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 border border-slate-600 hover:scale-110 transition" title="Green"></button>
+              </div>
+
+            <span class="w-[1px] bg-slate-700 my-1 mx-0.5"></span>
+            <button type="button" onclick="execCmd('justifyLeft', 'modalCardBack')" class="toolbar-btn" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
+            <button type="button" onclick="execCmd('justifyCenter', 'modalCardBack')" class="toolbar-btn" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
+            <button type="button" onclick="execCmd('justifyRight', 'modalCardBack')" class="toolbar-btn" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
+
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertUnorderedList', 'modalCardBack')" class="toolbar-btn" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+<button type="button" onmousedown="event.preventDefault()" onclick="execCmd('insertOrderedList', 'modalCardBack')" class="toolbar-btn" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+
+
+
+            <button type="button" onclick="execCmd('removeFormat', 'modalCardBack')" class="toolbar-btn" title="Clear Formatting"><i class="fa-solid fa-eraser"></i></button>
+          </div>
+          <div id="modalCardBack" contenteditable="true" class="editor-canvas !min-h-[80px]"></div>
+        </div>
+      </div>
+
+      <div class="flex space-x-3 pt-2">
+        <button onclick="saveModalCard()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition shadow-md">
+          Save & Add Card
+        </button>
+        <button onclick="closeAddCardModal()" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-xs font-semibold transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLE PENCIL / TOUCH SKETCH & ANNOTATION MODAL -->
+  <div id="sketchModal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+        <h3 class="font-bold text-white text-base flex items-center space-x-2">
+          <i class="fa-solid fa-pencil text-purple-400"></i>
+          <span>Apple Pencil Sketch & Annotation</span>
+        </h3>
+        <button onclick="closeSketchModal()" class="text-slate-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900 p-2.5 rounded-xl border border-slate-700">
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="setSketchTool('pen')" id="sketchPenBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition">Pen</button>
+          <button type="button" onclick="setSketchTool('eraser')" id="sketchEraserBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-slate-300 transition">Eraser</button>
+        </div>
+        <div class="flex items-center space-x-3">
+          <label class="text-xs text-slate-300 flex items-center gap-1.5">
+            Color:
+            <input type="color" id="sketchColor" value="#ffffff" class="w-7 h-7 bg-transparent border-0 cursor-pointer rounded" />
+          </label>
+          <label class="text-xs text-slate-300 flex items-center gap-1.5">
+            Size:
+            <input type="range" id="sketchSize" min="1" max="20" value="3" class="w-24 accent-indigo-500" />
+          </label>
+          <button type="button" onclick="clearSketchCanvas()" class="px-3 py-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 rounded-lg text-xs font-semibold transition">Clear</button>
+        </div>
+      </div>
+
+      <div class="border border-slate-700 rounded-2xl overflow-hidden flex justify-center bg-slate-950 relative">
+        <canvas id="sketchCanvas" width="600" height="350" class="w-full max-h-[350px] object-contain"></canvas>
+      </div>
+
+      <div class="flex space-x-3 pt-2">
+        <button onclick="saveSketchToActiveEditor()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition shadow-md flex items-center justify-center space-x-2">
+          <i class="fa-solid fa-check"></i>
+          <span>Insert Annotated Sketch into Card</span>
+        </button>
+        <button onclick="closeSketchModal()" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-xs font-semibold transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SESSION SUMMARY MODAL -->
+  <div id="sessionSummaryModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
+      <div class="text-center space-y-1 border-b border-slate-700 pb-4">
+        <div class="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center mx-auto mb-2 text-indigo-400 text-xl">
+          <i class="fa-solid fa-flag-checkered"></i>
+        </div>
+        <h3 class="font-bold text-white text-lg">Study Session Paused</h3>
+        <p class="text-xs text-slate-400">Your progress has been saved successfully.</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-slate-900 p-4 rounded-2xl border border-slate-700/60 text-center">
+          <span class="text-2xl font-black text-indigo-400" id="summaryReviewedCount">0</span>
+          <span class="block text-[11px] font-semibold text-slate-400 mt-1 uppercase">Cards Reviewed</span>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-2xl border border-slate-700/60 text-center">
+          <span class="text-2xl font-black text-slate-200" id="summaryLeftCount">0</span>
+          <span class="block text-[11px] font-semibold text-slate-400 mt-1 uppercase">Cards Left</span>
+        </div>
+      </div>
+
+      <div class="space-y-2 bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/60 text-xs">
+        <div class="flex justify-between text-slate-300">
+          <span>Completion Rate:</span>
+          <span class="font-bold text-indigo-400" id="summaryPercentRate">0%</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+          <div id="summaryProgressBar" class="bg-indigo-500 h-full w-0 transition-all duration-300"></div>
+        </div>
+      </div>
+
+      <div class="flex flex-col space-y-2 pt-2">
+        <button onclick="resumeStudySession()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition shadow-md">
+          Continue Learning
+        </button>
+        <button onclick="exitStudy()" class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-xs font-semibold transition">
+          Return to Decks Hub
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast Container -->
+  <div id="toastContainer"></div>
+
+  <!-- Application Logic JS -->
+  <script>
+
+
+function convertFontTags(container) {
+
+    container.querySelectorAll('font').forEach(font => {
+
+        const span = document.createElement('span');
+
+        if (font.hasAttribute('color')) {
+            span.style.color = font.getAttribute('color');
+        }
+
+        if (font.hasAttribute('face')) {
+            span.style.fontFamily = font.getAttribute('face');
+        }
+
+        if (font.hasAttribute('size')) {
+            span.style.fontSize = font.getAttribute('size');
+        }
+
+        span.innerHTML = font.innerHTML;
+
+        font.replaceWith(span);
+    });
+}
+
+
+function sanitizeHtmlContent(html) {
+
+    if (!html) return '';
+
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+
+    temp.querySelectorAll('*').forEach(el => {
+        // Read explicitly set or computed inline font weight
+        const savedWeight = el.style.fontWeight || (window.getComputedStyle(el).fontWeight);
+
+        el.style.removeProperty('position');
+        el.style.removeProperty('top');
+        el.style.removeProperty('left');
+        el.style.removeProperty('right');
+        el.style.removeProperty('bottom');
+
+        // Retain inline font-weights if present in pasted or formatted text
+        if (savedWeight) {
+    el.style.fontWeight = savedWeight;
+}
+
+        if (el.className) {
+            const cls = String(el.className);
+            if (cls.includes('Mso')) {
+                el.removeAttribute('class');
+            }
+        }
+    });
+
+    return temp.innerHTML;
+}
+
+
+// Handle Backspace inside lists to remove bullets when empty
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Backspace') {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+
+    let node = sel.anchorNode;
+    // Traverse up to find if we are inside a list item (LI)
+    while (node && node !== document.body) {
+      if (node.nodeName === 'LI') {
+        // Check if the list item is completely empty or just contains zero-width spaces/breaks
+        const textContent = node.textContent.trim();
+        const isAtStart = sel.anchorOffset === 0;
+
+        // If the item is empty, or cursor is at the very beginning of the item
+        if (textContent === '' || (isAtStart && sel.isCollapsed)) {
+          e.preventDefault();
+          
+          // Outdent the list item to convert it back to a normal paragraph or remove the bullet
+          document.execCommand('outdent', false, null);
+          
+          // Optional: If outdent leaves an empty list container or if it's the last item, clean up if needed
+          const parentList = node.parentNode;
+          if (parentList && (parentList.nodeName === 'UL' || parentList.nodeName === 'OL') && parentList.children.length === 1 && parentList.textContent.trim() === '') {
+            parentList.remove();
+          }
+        }
+        break;
+      }
+      node = node.parentNode;
+    }
+  }
+});
+
+
+function execCmd(command, editorId = null, value = null) {
+  const targetId = editorId || activeEditorId;
+  if (!targetId) return;
+
+  const editor = document.getElementById(targetId);
+  if (!editor) return;
+
+  editor.focus();
+
+  // Restore last cursor position if available
+  if (savedRange) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  }
+
+  if (command === 'removeFormat') {
+    // Aggressive deep-clean: remove all inline styles, spans, and formatting wrappers completely
+    const sel = window.getSelection();
+    if (sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      const tempDiv = document.createElement('div');
+      tempDiv.appendChild(range.extractContents());
+      // Strip all tags except basic line breaks, keeping only raw text
+      range.insertNode(document.createTextNode(tempDiv.textContent || tempDiv.innerText || ''));
+    } else {
+      // If no text is selected, clear formatting on the entire active editor box safely
+      const htmlContent = editor.innerText;
+      editor.innerHTML = '';
+      editor.appendChild(document.createTextNode(htmlContent));
+    }
+  } else {
+    document.execCommand(command, false, value);
+  }
+
+  // Save updated selection
+  const sel = window.getSelection();
+  if (sel.rangeCount > 0) {
+    savedRange = sel.getRangeAt(0).cloneRange();
+  }
+}
+
+
+function promptCreateDeck() {
+  const deckName = prompt("Enter new deck name:");
+  if (!deckName || !deckName.trim()) return;
+
+  // Build a list of available groups/categories for the prompt
+  const categoriesList = appState.categories.join(", ");
+  const groupName = prompt(`Enter group (category) name for this deck.\nAvailable groups: ${categoriesList}`, appState.categories[0] || "General");
+  
+  if (groupName === null) return; // User cancelled
+
+  const trimmedGroup = groupName.trim() || "General";
+
+  // Automatically add the group if it doesn't exist yet
+  if (!appState.categories.includes(trimmedGroup)) {
+    appState.categories.push(trimmedGroup);
+  }
+
+  // Create the new blank deck object
+  const deckId = 'deck_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+  appState.decks[deckId] = {
+    id: deckId,
+    name: deckName.trim(),
+    category: trimmedGroup,
+    cards: []
+  };
+
+  saveLocalState();
+  renderCategories();
+  renderDecks();
+  showToast("New deck created successfully!");
+}
+
+    let appState = {
+      decks: {},
+      categories: ['General', 'Medical', 'Languages'],
+      selectedCategory: 'ALL',
+      activeStudyDeckId: null,
+      studyQueue: [],
+      studyIndex: 0,
+      attachedPhotoBase64: null,
+      syncKey: localStorage.getItem('anki_sync_key') || '',
+      selectedCardIds: new Set(),
+      clipboardCard: null
+    };
+
+    let selectedSidebarCardIds = new Set();
+    let idbDB = null;
+    let dbInstance = null;
+    let targetImageToReplace = null;
+    let activeSketchTargetId = null;
+    let annotationImageObj = null;
+    let isImmersive = false;
+
+    let sketchCanvas, sketchCtx;
+    let isDrawing = false;
+    let sketchTool = 'pen';
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      await initIndexedDB();
+      await loadStateFromIDB();
+      renderCategories();
+      renderDecks();
+      initSketchCanvas();
+      checkPasteVisibility();
+
+      // Listen for clipboard or deck changes from other browser tabs
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'anki_shared_clipboard') {
+          checkPasteVisibility();
+        }
+      });
+    });
+
+    function initIndexedDB() {
+      return new Promise((resolve) => {
+        const request = indexedDB.open('AnkiSyncDB', 1);
+        request.onerror = () => resolve(false);
+        request.onsuccess = (e) => {
+          idbDB = e.target.result;
+          resolve(true);
+        };
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('state')) {
+            db.createObjectStore('state');
+          }
+        };
+      });
+    }
+
+    function saveLocalState() {
+      if (idbDB) {
+        try {
+          const tx = idbDB.transaction('state', 'readwrite');
+          const store = tx.objectStore('state');
+          store.put({
+            decks: appState.decks,
+            categories: appState.categories,
+            selectedCategory: appState.selectedCategory
+          }, 'app_state');
+        } catch(e) {
+          console.error("IndexedDB save error:", e);
+        }
+      }
+    }
+
+    function loadStateFromIDB() {
+      return new Promise((resolve) => {
+        if (!idbDB) {
+          resolve();
+          return;
+        }
+        try {
+          const tx = idbDB.transaction('state', 'readonly');
+          const store = tx.objectStore('state');
+          const req = store.get('app_state');
+          req.onsuccess = () => {
+            if (req.result) {
+              if (req.result.decks) appState.decks = req.result.decks;
+              if (req.result.categories) appState.categories = req.result.categories;
+              if (req.result.selectedCategory) appState.selectedCategory = req.result.selectedCategory;
+            }
+            resolve();
+          };
+          req.onerror = () => resolve();
+        } catch(e) {
+          resolve();
+        }
+      });
+    }
+
+    // --- TRUE .APKG FILE EXPORT (WITH NATIVE "SAVE AS" FILE PICKER) ---
+    async function saveAllDecksToFile() {
+      try {
+        const SQL = await initSqlJs();
+        const db = new SQL.Database();
+
+        db.run(`CREATE TABLE col (id integer primary key, crt integer, mod integer, scm integer, ver integer, dty integer, usn integer, ls integer, conf text, models text, decks text, dconf text, tags text);`);
+        db.run(`CREATE TABLE notes (id integer primary key, guid text, mid integer, mod integer, usn integer, tags text, flds text, sfld text, csum integer, flags integer, data text);`);
+        db.run(`CREATE TABLE cards (id integer primary key, nid integer, did integer, ord integer, mod integer, usn integer, type integer, queue integer, due integer, ivl integer, factor integer, reps integer, lapses integer, left integer, odue integer, odid integer, flags integer, data text);`);
+        db.run(`CREATE TABLE graves (usn integer, oid integer, type integer);`);
+        db.run(`CREATE TABLE revlog (id integer primary key, cid integer, usn integer, ease integer, ivl integer, lastIvl integer, factor integer, time integer, type integer);`);
+        
+        const now = Math.floor(Date.now() / 1000);
+        const decksMeta = {};
+        
+        decksMeta["1"] = {
+          id: 1,
+          name: "Default",
+          mod: now,
+          usn: 0,
+          mtimeSec: now,
+          desc: "",
+          conf: 1,
+          extendLeft: 0,
+          extendRev: 0,
+          extendNew: 0,
+          collapsed: false,
+          browserCollapsed: false,
+          newToday: [0, 0],
+          revToday: [0, 0],
+          lrnToday: [0, 0],
+          timeToday: [0, 0],
+          dyn: 0
+        };
+
+        let deckIdCounter = 1;
+        let noteIdCounter = Date.now();
+        let cardIdCounter = Date.now() + 100000;
+        const modelId = 1600000000000;
+        let mediaMap = {};
+        let mediaCounter = { val: 0 };
+        const zip = new JSZip();
+
+        let isFirstDeck = true;
+        for (const [deckKey, deck] of Object.entries(appState.decks)) {
+          const did = isFirstDeck ? 1 : ++deckIdCounter;
+          if (isFirstDeck) {
+            decksMeta["1"].name = deck.name || "Default";
+            isFirstDeck = false;
+          } else {
+            decksMeta[String(did)] = {
+              id: did,
+              name: deck.name || "Deck",
+              mod: now,
+              usn: 0,
+              mtimeSec: now,
+              desc: "",
+              conf: 1,
+              extendLeft: 0,
+              extendRev: 0,
+              extendNew: 0,
+              collapsed: false,
+              browserCollapsed: false,
+              newToday: [0, 0],
+              revToday: [0, 0],
+              lrnToday: [0, 0],
+              timeToday: [0, 0],
+              dyn: 0
+            };
+          }
+
+          if (deck.cards) {
+            deck.cards.forEach((card, cIdx) => {
+              const nid = noteIdCounter++;
+              const cid = cardIdCounter++;
+              let rawTitle = card.title || '';
+              let titleClean = processImagesForExport(rawTitle.replace(/<[^>]*>?/gm, ''), mediaMap, mediaCounter, zip);
+              let frontClean = processImagesForExport(card.front, mediaMap, mediaCounter, zip);
+              let backClean = processImagesForExport(card.back, mediaMap, mediaCounter, zip);
+        
+              const flds = titleClean + '\x1f' + frontClean + '\x1f' + backClean;          
+              const sfld = titleClean || frontClean.replace(/<[^>]*>?/gm, '').substring(0, 50);
+              const guid = Math.random().toString(36).substring(2, 10);
+
+              db.run(`INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [nid, guid, modelId, now, -1, "", flds, sfld, 0, 0, ""]);
+              db.run(`INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, [cid, nid, did, 0, now, -1, 0, 0, cIdx, 0, 2500, 0, 0, 0, 0, 0, 0, ""]);
+            });
+          }
+        }
+        
+        const defaultModel = {
+          [modelId]: {
+            id: modelId,
+            name: "Basic",
+            type: 0,
+            mod: now,
+            usn: 0,
+            sortf: 0,
+            did: 1,
+            tmpls: [{
+              name: "Card 1",
+              ord: 0,
+              qfmt: '<div style="font-weight:bold; color:indigo; margin-bottom:8px;">{{Title}}</div>{{Front}}',
+              afmt: "{{FrontSide}}<hr id=answer>{{Back}}",
+              bqfmt: "",
+              bafmt: "",
+              did: null,
+              bfont: "",
+              bsize: 0
+            }],
+            flds: [
+              {name: "Title", ord: 0, sticky: false, rtl: false, font: "Arial", size: 20},
+              {name: "Front", ord: 1, sticky: false, rtl: false, font: "Arial", size: 20},
+              {name: "Back", ord: 2, sticky: false, rtl: false, font: "Arial", size: 20}
+            ],
+            css: ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }",
+            latexPre: "",
+            latexPost: ""
+          }
+        };
+
+        const defaultConf = {
+          "id": 1,
+          "name": "Default",
+          "mod": now,
+          "usn": 0,
+          "replayq": true,
+          "dueCounts": true,
+          "ivlFct": 1,
+          "maxTaken": 60,
+          "timer": 0,
+          "autoplay": true,
+          "usrdeliv": 0,
+          "new": {"delays": [1, 10], "ints": [1, 4, 0], "initialFactor": 2500, "separate": true, "order": 0, "perDay": 20},
+          "rev": {"perDay": 200, "ease4": 1.3, "fuzz": 0.05, "minSpace": 1, "ivlFct": 1, "maxIvl": 36500, "bury": false},
+          "lapse": {"delays": [10], "mult": 0, "minInt": 1, "leechFails": 8, "leechAction": 0},
+          "dyn": false
+        };
+
+        const colRow = [
+          1, 
+          now - 86400, 
+          now, 
+          now, 
+          11, 
+          0, 
+          0, 
+          0, 
+          JSON.stringify({"1": defaultConf}), 
+          JSON.stringify(defaultModel), 
+          JSON.stringify(decksMeta), 
+          JSON.stringify({"1": defaultConf}), 
+          "{}"
+        ];
+        db.run(`INSERT INTO col VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`, colRow);
+        const binaryArray = db.export();
+        zip.file("collection.anki2", binaryArray);
+        zip.file("media", JSON.stringify(mediaMap));
+
+        
+
+const content = await zip.generateAsync({ type: "blob" });
+        
+        // Check if File System Access API is supported and usable
+        if (window.isSecureContext && 'showSaveFilePicker' in window) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: "AnkiSync_Export_" + Date.now() + ".apkg",
+              types: [{
+                description: 'Anki Package (*.apkg)',
+                accept: { 'application/octet-stream': ['.apkg'] },
+              }],
+            });
+            const writable = await handle.createWritable();
+            await writable.write(content);
+            await writable.close();
+            return;
+          } catch (err) {
+            if (err.name === 'AbortError') {
+              return; // User cancelled the save dialog
+            }
+            console.warn("File System Access API failed, falling back to standard download:", err);
+          }
+        }
+
+        // Fallback: Creates a direct download link without the generic popup prompt
+        const filename = "AnkiSync_Deck_" + Date.now() + ".apkg";
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = URL.createObjectURL(content);
+        downloadAnchor.download = filename;
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        showToast("Deck exported successfully!");
+
+
+
+      } catch(err) {
+        console.error("APKG Export Error:", err);
+        alert("APKG Export Error: " + err.message);
+      }
+    }
+
+    function processImagesForExport(html, mediaMap, counterObj, zip) {
+      if (!html) return '';
+      return html.replace(/src=["'](data:image\/[^;]+;base64,[^"']+)["']/g, (match, dataUrl) => {
+        const base64Data = dataUrl.split(',')[1];
+        if (!base64Data) return match;
+
+        const idx = counterObj.val++;
+        const filename = `img_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.png`;
+        mediaMap[String(idx)] = filename;
+        
+        zip.file(filename, base64Data, { base64: true });
+        return `src="${filename}"`;
+      });
+    }
+
+    // --- APPLE PENCIL / ANNOTATION CANVAS ---
+    function initSketchCanvas() {
+      sketchCanvas = document.getElementById('sketchCanvas');
+      if (!sketchCanvas) return;
+      sketchCtx = sketchCanvas.getContext('2d');
+
+      clearSketchCanvas();
+
+      sketchCanvas.addEventListener('pointerdown', startDrawing);
+      sketchCanvas.addEventListener('pointermove', draw);
+      sketchCanvas.addEventListener('pointerup', stopDrawing);
+      sketchCanvas.addEventListener('pointerleave', stopDrawing);
+    }
+
+    function getMousePos(e) {
+      const rect = sketchCanvas.getBoundingClientRect();
+      const scaleX = sketchCanvas.width / rect.width;
+      const scaleY = sketchCanvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    function startDrawing(e) {
+      isDrawing = true;
+      const pos = getMousePos(e);
+      sketchCtx.beginPath();
+      sketchCtx.moveTo(pos.x, pos.y);
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      const pos = getMousePos(e);
+      const color = document.getElementById('sketchColor').value;
+      const size = document.getElementById('sketchSize').value;
+
+      sketchCtx.lineWidth = size;
+      sketchCtx.lineCap = 'round';
+      sketchCtx.lineJoin = 'round';
+
+      if (sketchTool === 'eraser') {
+        if (annotationImageObj) {
+          redrawCanvasWithBackground();
+          return;
+        } else {
+          sketchCtx.strokeStyle = '#0f172a';
+        }
+      } else {
+        sketchCtx.strokeStyle = color;
+      }
+
+      if (e.pointerType === 'pen' && e.pressure > 0) {
+        sketchCtx.lineWidth = size * (e.pressure * 1.5);
+      }
+
+      sketchCtx.lineTo(pos.x, pos.y);
+      sketchCtx.stroke();
+    }
+
+    function stopDrawing() {
+      isDrawing = false;
+    }
+
+    function setSketchTool(tool) {
+      sketchTool = tool;
+      const penBtn = document.getElementById('sketchPenBtn');
+      const eraserBtn = document.getElementById('sketchEraserBtn');
+      if (tool === 'pen') {
+        penBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition";
+        eraserBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-slate-300 transition";
+      } else {
+        eraserBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition";
+        penBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-slate-300 transition";
+      }
+    }
+
+    function clearSketchCanvas() {
+      if (annotationImageObj) {
+        redrawCanvasWithBackground();
+      } else {
+        sketchCtx.fillStyle = '#0f172a';
+        sketchCtx.fillRect(0, 0, sketchCanvas.width, sketchCanvas.height);
+      }
+    }
+
+    function redrawCanvasWithBackground() {
+      sketchCtx.fillStyle = '#0f172a';
+      sketchCtx.fillRect(0, 0, sketchCanvas.width, sketchCanvas.height);
+      if (annotationImageObj) {
+        const hRatio = sketchCanvas.width / annotationImageObj.width;
+        const vRatio = sketchCanvas.height / annotationImageObj.height;
+        const ratio = Math.min(hRatio, vRatio);
+        const centerShiftX = (sketchCanvas.width - annotationImageObj.width * ratio) / 2;
+        const centerShiftY = (sketchCanvas.height - annotationImageObj.height * ratio) / 2;
+        sketchCtx.drawImage(annotationImageObj, 0, 0, annotationImageObj.width, annotationImageObj.height, centerShiftX, centerShiftY, annotationImageObj.width * ratio, annotationImageObj.height * ratio);
+      }
+    }
+
+    function openSketchModal(targetId, existingImgSrc = null) {
+      activeSketchTargetId = targetId;
+      document.getElementById('sketchModal').classList.remove('hidden');
+      
+      if (existingImgSrc) {
+        const img = new Image();
+        img.onload = function() {
+          annotationImageObj = img;
+          redrawCanvasWithBackground();
+        };
+        img.src = existingImgSrc;
+      } else {
+        annotationImageObj = null;
+        clearSketchCanvas();
+      }
+    }
+
+    function closeSketchModal() {
+      document.getElementById('sketchModal').classList.add('hidden');
+      activeSketchTargetId = null;
+      annotationImageObj = null;
+    }
+
+    function saveSketchToActiveEditor() {
+      if (!activeSketchTargetId) return;
+      const dataUrl = sketchCanvas.toDataURL('image/png');
+      const editor = document.getElementById(activeSketchTargetId);
+      if (editor) {
+        editor.focus();
+        document.execCommand('insertImage', false, dataUrl);
+      }
+      closeSketchModal();
+    }
+
+    // --- IMAGE RESIZING LOGIC ---
+    function resizeImage(side, imgIndex, sizeMode) {
+      const card = appState.studyQueue[appState.studyIndex];
+      const sideKey = side;
+      const temp = document.createElement('div');
+      temp.innerHTML = card[sideKey];
+      const imgs = temp.querySelectorAll('img');
+
+      if (imgs[imgIndex]) {
+        if (sizeMode === 'small') imgs[imgIndex].style.width = '150px';
+        else if (sizeMode === 'medium') imgs[imgIndex].style.width = '300px';
+        else if (sizeMode === 'large') imgs[imgIndex].style.width = '100%';
+
+        card[sideKey] = temp.innerHTML;
+        const deck = appState.decks[appState.activeStudyDeckId];
+        const origCard = deck.cards.find(c => c.id === card.id);
+        if (origCard) origCard[sideKey] = card[sideKey];
+
+        saveLocalState();
+        showStudyCard();
+      }
+    }
+
+    function annotateExistingImage(side, imgIndex) {
+      const card = appState.studyQueue[appState.studyIndex];
+      const sideKey = side;
+      const temp = document.createElement('div');
+      temp.innerHTML = card[sideKey];
+      const imgs = temp.querySelectorAll('img');
+
+      if (imgs[imgIndex]) {
+        const imgSrc = imgs[imgIndex].src;
+        const editTargetId = side === 'front' ? 'editCardFront' : 'editCardBack';
+        openSketchModal(editTargetId, imgSrc);
+      }
+    }
+
+    // --- IMMERSIVE MODE ---
+    function toggleImmersiveMode() {
+      isImmersive = !isImmersive;
+      const header = document.getElementById('appHeader');
+      const tabBar = document.getElementById('appTabBar');
+      const btnText = document.getElementById('immersiveBtnText');
+      const btnIcon = document.querySelector('#immersiveBtn i');
+
+      if (isImmersive) {
+        header.style.transform = 'translateY(-100%)';
+        header.style.height = '0';
+        header.style.overflow = 'hidden';
+        header.style.border = 'none';
+        tabBar.style.display = 'none';
+        document.body.classList.add('zen-mode');
+        btnText.innerText = 'Exit Full Screen';
+        btnIcon.className = 'fa-solid fa-compress';
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(err => {});
+        }
+      } else {
+        header.style.transform = 'translateY(0)';
+        header.style.height = '';
+        header.style.overflow = '';
+        header.style.border = '';
+        tabBar.style.display = '';
+        document.body.classList.remove('zen-mode');
+        btnText.innerText = 'Full Screen';
+        btnIcon.className = 'fa-solid fa-expand';
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(err => {});
+        }
+      }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && isImmersive) {
+        toggleImmersiveMode();
+      }
+    });
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-view').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow');
+        btn.classList.add('text-slate-400');
+      });
+
+      document.getElementById(`view-${tabId}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow');
+        activeBtn.classList.remove('text-slate-400');
+      }
+
+      if (tabId === 'organizer') populateOrganizerDropdowns();
+      if (tabId === 'create') populateCreateDropdown();
+    }
+
+    function renderCategories() {
+      const container = document.getElementById('categoryFilterContainer');
+      let html = `<button onclick="filterCategory('ALL')" class="cat-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold ${appState.selectedCategory === 'ALL' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-700/60 text-slate-300 hover:bg-slate-700'} transition">All Decks</button>`;
+      
+      appState.categories.forEach(cat => {
+        const active = appState.selectedCategory === cat;
+        html += `<button onclick="filterCategory('${cat}')" class="cat-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold ${active ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-700/60 text-slate-300 hover:bg-slate-700'} transition">${cat}</button>`;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function filterCategory(cat) {
+      appState.selectedCategory = cat;
+      renderCategories();
+      renderDecks();
+    }
+
+    function promptCreateCategory() {
+      const name = prompt("Enter new category/group name:");
+      if (name && !appState.categories.includes(name)) {
+        appState.categories.push(name.trim());
+        saveLocalState();
+        renderCategories();
+      }
+    }
+
+    function renderDecks() {
+      const grid = document.getElementById('decksGrid');
+      const emptyNotice = document.getElementById('emptyDecksNotice');
+      grid.innerHTML = '';
+
+      const deckKeys = Object.keys(appState.decks);
+      let visibleCount = 0;
+
+      deckKeys.forEach(deckId => {
+        const deck = appState.decks[deckId];
+        if (appState.selectedCategory !== 'ALL' && deck.category !== appState.selectedCategory) return;
+        
+        visibleCount++;
+        const cardCount = deck.cards ? deck.cards.length : 0;
+        const lastIdx = deck.lastIndex || 0;
+        const percent = cardCount > 0 ? Math.round((lastIdx / cardCount) * 100) : 0;
+
+        // Build the dropdown options dynamically from appState.categories
+        let categoryOptions = '';
+        appState.categories.forEach(cat => {
+          const selected = (deck.category === cat) ? 'selected' : '';
+          categoryOptions += `<option value="${cat}" ${selected}>${cat}</option>`;
+        });
+
+        const cardEl = document.createElement('div');
+        cardEl.className = "bg-slate-800 p-5 rounded-3xl border border-slate-700 shadow-lg flex flex-col justify-between hover:border-slate-600 transition space-y-4";
+        cardEl.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <select onchange="updateDeckCategory('${deck.id}', this.value)" class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-900 text-indigo-400 border border-slate-700/80 outline-none cursor-pointer">
+                ${categoryOptions}
+              </select>
+              <button onclick="deleteDeck('${deck.id}')" class="text-slate-500 hover:text-rose-400 transition text-xs p-1">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+            <h3 class="font-bold text-slate-100 text-base leading-snug line-clamp-2">${deck.name}</h3>
+
+
+
+            <div class="flex items-center justify-between text-xs text-slate-400 font-medium">
+              <span>${cardCount} cards</span>
+              <span>${percent}% completed</span>
+            </div>
+            <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+              <div class="bg-indigo-500 h-full" style="width: ${percent}%"></div>
+            </div>
+          </div>
+
+  <div class="pt-2 flex items-center space-x-2">
+            <button onclick="startStudy('${deck.id}')" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-1.5">
+              <i class="fa-solid fa-folder-open text-[10px]"></i>
+              <span>Open</span>
+            </button>
+          </div>  
+
+
+
+        `;
+        grid.appendChild(cardEl);
+      });
+
+      if (visibleCount === 0) {
+        emptyNotice.classList.remove('hidden');
+      } else {
+        emptyNotice.classList.add('hidden');
+      }
+    }
+
+    function deleteDeck(deckId) {
+      if (confirm("Are you sure you want to delete this deck and all its cards?")) {
+        delete appState.decks[deckId];
+        saveLocalState();
+        renderDecks();
+      }
+    }
+
+    
+function startStudy(deckId) {
+      const deck = appState.decks[deckId];
+      if (!deck) return;
+
+      appState.activeStudyDeckId = deckId;
+      appState.studyQueue = deck.cards ? [...deck.cards] : [];
+      
+      // Resume from where you left off, or start at 0 if completed/new
+      let resumeIdx = deck.lastIndex || 0;
+      if (resumeIdx >= appState.studyQueue.length) {
+        resumeIdx = 0;
+      }
+      appState.studyIndex = resumeIdx;
+      selectedSidebarCardIds.clear();
+
+      document.getElementById('studyDeckTitle').innerText = deck.name;
+      checkPasteVisibility();
+      renderSidebarList();
+
+      if (appState.studyQueue.length > 0) {
+        showStudyCard();
+        if (resumeIdx > 0) {
+          showToast(`Resumed from card ${resumeIdx + 1}`);
+        }
+      } else {
+        document.getElementById('studyProgressText').innerText = "Card 0 of 0";
+        document.getElementById('cardTitleBadge').innerText = "EMPTY DECK";
+        document.getElementById('frontContent').innerHTML = "<p class='text-slate-400 text-sm'>This deck is empty. Click <b>'Add Card'</b> above to add your first card!</p>";
+        document.getElementById('backContent').innerHTML = "<p class='text-slate-400 text-sm'>No cards available.</p>";
+      }
+
+      switchTab('study');
+    }
+
+
+
+
+
+
+    // --- SIDEBAR & MULTI-SELECT POSITION REORDERING ---
+    function renderSidebarList() {
+      const listEl = document.getElementById('slide-list');
+      const countEl = document.getElementById('sidebarCardCount');
+      if (!listEl) return;
+
+      countEl.innerText = appState.studyQueue.length;
+      listEl.innerHTML = '';
+
+      appState.studyQueue.forEach((card, index) => {
+        const li = document.createElement('li');
+        const isChecked = selectedSidebarCardIds.has(card.id);
+        li.className = `slide-item ${index === appState.studyIndex ? 'active' : ''}`;
+        
+        let displayLabel = card.title ? card.title : '';
+        if (!displayLabel) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = card.front;
+          const cleanText = tempDiv.textContent || tempDiv.innerText || 'Card ' + (index + 1);
+          displayLabel = cleanText.substring(0, 24);
+        }
+
+        li.innerHTML = `
+          <div class="flex items-center space-x-2 truncate flex-1">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSidebarCardSelection('${card.id}', this.checked)" onclick="event.stopPropagation()" class="w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer" />
+            <div class="flex items-center space-x-2 truncate cursor-pointer flex-1" onclick="selectCardFromSidebar(${index})">
+              <span class="text-[10px] text-slate-500 font-bold">${index + 1}.</span>
+              <span class="line-clamp-1 truncate font-medium">${displayLabel}</span>
+            </div>
+          </div>
+          <div class="flex items-center space-x-1" onclick="event.stopPropagation()">
+            <button onclick="moveCardPosition(${index}, -1)" ${index === 0 ? 'disabled class="opacity-25 cursor-not-allowed"' : ''} class="p-1 text-slate-400 hover:text-white text-xs" title="Move Up"><i class="fa-solid fa-chevron-up"></i></button>
+            <button onclick="moveCardPosition(${index}, 1)" ${index === appState.studyQueue.length - 1 ? 'disabled class="opacity-25 cursor-not-allowed"' : ''} class="p-1 text-slate-400 hover:text-white text-xs" title="Move Down"><i class="fa-solid fa-chevron-down"></i></button>
+            <button onclick="copyCardToClipboard('${card.id}')" class="p-1 text-indigo-400 hover:text-white text-xs ml-1" title="Copy Card"><i class="fa-solid fa-copy"></i></button>
+            <button onclick="deleteCardFromActiveDeck('${card.id}')" class="p-1 text-rose-400 hover:text-white text-xs ml-1" title="Delete Card"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        `;
+        listEl.appendChild(li);
+      });
+      updateSidebarBatchUI();
+    }
+
+    function toggleSidebarCardSelection(cardId, isChecked) {
+      if (isChecked) selectedSidebarCardIds.add(cardId);
+      else selectedSidebarCardIds.delete(cardId);
+      updateSidebarBatchUI();
+    }
+
+    function toggleSelectAllSidebarCards(isChecked) {
+      selectedSidebarCardIds.clear();
+      if (isChecked) {
+        appState.studyQueue.forEach(c => selectedSidebarCardIds.add(c.id));
+      }
+      renderSidebarList();
+    }
+
+    function updateSidebarBatchUI() {
+      const count = selectedSidebarCardIds.size;
+      const batchToolbar = document.getElementById('sidebarBatchToolbar');
+      const countSpan = document.getElementById('sidebarSelectedCount');
+      if (batchToolbar && countSpan) {
+        if (count > 0) {
+          batchToolbar.classList.remove('hidden');
+          countSpan.innerText = count + ' selected';
+        } else {
+          batchToolbar.classList.add('hidden');
+        }
+      }
+    }
+
+    function moveSelectedSidebarCards(direction) {
+      if (selectedSidebarCardIds.size === 0) return;
+
+      const queue = appState.studyQueue;
+      if (direction === 'top') {
+        const selectedCards = queue.filter(c => selectedSidebarCardIds.has(c.id));
+        const unselectedCards = queue.filter(c => !selectedSidebarCardIds.has(c.id));
+        appState.studyQueue = [...selectedCards, ...unselectedCards];
+      } else if (direction === 'bottom') {
+        const selectedCards = queue.filter(c => selectedSidebarCardIds.has(c.id));
+        const unselectedCards = queue.filter(c => !selectedSidebarCardIds.has(c.id));
+        appState.studyQueue = [...unselectedCards, ...selectedCards];
+      } else {
+        const indices = [];
+        queue.forEach((c, idx) => {
+          if (selectedSidebarCardIds.has(c.id)) indices.push(idx);
+        });
+
+        if (direction < 0) {
+          for (let i = 0; i < indices.length; i++) {
+            let curr = indices[i];
+            let target = curr + direction;
+            if (target >= 0 && target < queue.length && !selectedSidebarCardIds.has(queue[target].id)) {
+              let temp = queue[curr];
+              queue[curr] = queue[target];
+              queue[target] = temp;
+              indices[i] = target;
+            }
+          }
+        } else {
+          for (let i = indices.length - 1; i >= 0; i--) {
+            let curr = indices[i];
+            let target = curr + direction;
+            if (target >= 0 && target < queue.length && !selectedSidebarCardIds.has(queue[target].id)) {
+              let temp = queue[curr];
+              queue[curr] = queue[target];
+              queue[target] = temp;
+              indices[i] = target;
+            }
+          }
+        }
+      }
+
+      updateDeckCardsFromQueue();
+      renderSidebarList();
+      showStudyCard();
+    }
+
+    function moveCardPosition(index, direction) {
+      const newIndex = index + direction;
+      if (newIndex < 0 || newIndex >= appState.studyQueue.length) return;
+
+      const temp = appState.studyQueue[index];
+      appState.studyQueue[index] = appState.studyQueue[newIndex];
+      appState.studyQueue[newIndex] = temp;
+
+      updateDeckCardsFromQueue();
+      if (appState.studyIndex === index) appState.studyIndex = newIndex;
+      else if (appState.studyIndex === newIndex) appState.studyIndex = index;
+      renderSidebarList();
+      showStudyCard();
+    }
+
+    function updateDeckCardsFromQueue() {
+      if (appState.activeStudyDeckId && appState.decks[appState.activeStudyDeckId]) {
+        appState.decks[appState.activeStudyDeckId].cards = [...appState.studyQueue];
+        saveLocalState();
+      }
+    }
+
+    function checkPasteVisibility() {
+      if (!appState.clipboardCard) {
+        try {
+          const storedClip = localStorage.getItem('anki_shared_clipboard');
+          if (storedClip) {
+            appState.clipboardCard = JSON.parse(storedClip);
+          }
+        } catch(e) {}
+      }
+
+      const pasteBtn = document.getElementById('sidebarPasteBtn');
+      const globalPasteBtn = document.getElementById('globalPasteBtn');
+      
+      if (globalPasteBtn) globalPasteBtn.classList.remove('hidden');
+
+      if (appState.clipboardCard) {
+        if (pasteBtn) pasteBtn.classList.remove('hidden');
+      } else {
+        if (pasteBtn) pasteBtn.classList.add('hidden');
+      }
+    }
+
+    function showToast(message) {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = 'toast-message';
+      toast.innerHTML = `<i class="fa-solid fa-circle-check text-indigo-400 mr-2"></i>${message}`;
+      
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.remove();
+      }, 1500);
+    }
+
+    function copyCardToClipboard(cardId) {
+      const card = appState.studyQueue.find(c => c.id === cardId);
+      if (card) {
+        const clipboardPayload = { ...card, id: 'card_' + Date.now() };
+        appState.clipboardCard = clipboardPayload;
+        
+        try {
+          localStorage.setItem('anki_shared_clipboard', JSON.stringify(clipboardPayload));
+        } catch(e) {
+          console.error("Failed to save clipboard to localStorage", e);
+        }
+
+        checkPasteVisibility();
+        showToast("Card copied to clipboard!");
+      }
+    }
+
+    function pasteCardToActiveDeck() {
+      try {
+        const storedClip = localStorage.getItem('anki_shared_clipboard');
+        if (storedClip) {
+          appState.clipboardCard = JSON.parse(storedClip);
+        }
+      } catch(e) {}
+
+      if (!appState.clipboardCard) {
+        showToast("Please copy a card first!");
+        return;
+      }
+      if (!appState.activeStudyDeckId) {
+        showToast("Open a study deck first!");
+        return;
+      }
+      
+      const deck = appState.decks[appState.activeStudyDeckId];
+      if (deck) {
+        const clonedCard = { ...appState.clipboardCard, id: 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 3) };
+        if (!deck.cards) deck.cards = [];
+        deck.cards.push(clonedCard);
+        appState.studyQueue = [...deck.cards];
+        saveLocalState();
+        renderSidebarList();
+        showToast("Card pasted successfully!");
+      }
+    }
+
+    function deleteCardFromActiveDeck(cardId) {
+      if (!confirm("Are you sure you want to delete this card?")) return;
+      appState.studyQueue = appState.studyQueue.filter(c => c.id !== cardId);
+      selectedSidebarCardIds.delete(cardId);
+      updateDeckCardsFromQueue();
+      if (appState.studyIndex >= appState.studyQueue.length) {
+        appState.studyIndex = Math.max(0, appState.studyQueue.length - 1);
+      }
+      renderSidebarList();
+      showStudyCard();
+    }
+
+function selectCardFromSidebar(index) {
+      appState.studyIndex = index;
+      document.getElementById('studyViewMode').classList.remove('hidden');
+      document.getElementById('studyEditMode').classList.add('hidden');
+      renderSidebarList();
+      showStudyCard();
+
+      // Automatically save progress as you navigate/study
+      if (appState.activeStudyDeckId && appState.decks[appState.activeStudyDeckId]) {
+        appState.decks[appState.activeStudyDeckId].lastIndex = appState.studyIndex;
+        saveLocalState();
+      }
+    }
+
+    // --- "STOP HERE" SESSION & STATISTICS ---
+    function stopStudySession() {
+      const total = appState.studyQueue.length;
+      const reviewed = appState.studyIndex + 1;
+      const left = total - reviewed;
+      const percent = Math.round((reviewed / total) * 100);
+
+      if (appState.activeStudyDeckId && appState.decks[appState.activeStudyDeckId]) {
+        appState.decks[appState.activeStudyDeckId].lastIndex = appState.studyIndex;
+        saveLocalState();
+      }
+
+      document.getElementById('summaryReviewedCount').innerText = reviewed;
+      document.getElementById('summaryLeftCount').innerText = left;
+      document.getElementById('summaryPercentRate').innerText = percent + '%';
+      document.getElementById('summaryProgressBar').style.width = percent + '%';
+
+      document.getElementById('sessionSummaryModal').classList.remove('hidden');
+    }
+
+    function resumeStudySession() {
+      document.getElementById('sessionSummaryModal').classList.add('hidden');
+    }
+
+    // --- ADD CARD MODAL ---
+    
+function openAddCardModal() {
+  document.getElementById('modalCardTitle').value = '';
+  document.getElementById('modalCardFront').innerHTML = '<span style="font-weight: bold;"><br></span>';
+  document.getElementById('modalCardBack').innerHTML = '<br>';
+  document.getElementById('quickAddModal').classList.remove('hidden');
+}
+
+
+    function closeAddCardModal() {
+      document.getElementById('quickAddModal').classList.add('hidden');
+    }
+
+    function saveModalCard() {
+  const title = document.getElementById('modalCardTitle').value.trim();
+  // Sanitize to clean external PPT/Word styles
+  const front = sanitizeHtmlContent(document.getElementById('modalCardFront').innerHTML.trim());
+  const back = sanitizeHtmlContent(document.getElementById('modalCardBack').innerHTML.trim());
+
+  if (!front) {
+    alert("Please enter front question content.");
+    return;
+  }
+
+  const newCard = {
+    id: 'card_' + Date.now(),
+    title: title || '',
+    front: front,
+    back: back || 'N/A'
+  };
+
+  const deck = appState.decks[appState.activeStudyDeckId];
+  if (deck) {
+    if (!deck.cards) deck.cards = [];
+    deck.cards.push(newCard);
+    appState.studyQueue = [...deck.cards];
+    saveLocalState();
+    renderSidebarList();
+    showStudyCard();
+    closeAddCardModal();
+    showToast("New card added successfully!");
+  }
+}
+
+
+    function showStudyCard() {
+      const card = appState.studyQueue[appState.studyIndex];
+      const cardEl = document.getElementById('studyCard');
+      cardEl.classList.remove('card-flipped');
+
+      document.getElementById('studyProgressText').innerText = `Card ${appState.studyIndex + 1} of ${appState.studyQueue.length}`;
+      
+      const badge = document.getElementById('cardTitleBadge');
+      badge.innerText = card.title ? card.title.toUpperCase() : 'QUESTION';
+
+      document.getElementById('frontContent').innerHTML = wrapImagesWithControls(card.front, 'front');
+      
+const backContent = document.getElementById('backContent');
+backContent.innerHTML = wrapImagesWithControls(card.back, 'back');
+
+    }
+
+    function wrapImagesWithControls(html, side) {
+      if (!html) return '';
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+
+      const imgs = temp.querySelectorAll('img');
+      imgs.forEach((img, idx) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'image-wrapper';
+        img.parentNode.insertBefore(wrapper, img);
+        wrapper.appendChild(img);
+
+        const actions = document.createElement('div');
+        actions.className = 'image-actions';
+        actions.setAttribute('onclick', 'event.stopPropagation()');
+        actions.innerHTML = `
+          <button onclick="resizeImage('${side}', ${idx}, 'small')" class="text-slate-300 hover:text-white px-1.5 py-0.5 text-[10px] bg-slate-900 rounded border border-slate-600" title="Small Size">S</button>
+          <button onclick="resizeImage('${side}', ${idx}, 'medium')" class="text-slate-300 hover:text-white px-1.5 py-0.5 text-[10px] bg-slate-900 rounded border border-slate-600" title="Medium Size">M</button>
+          <button onclick="resizeImage('${side}', ${idx}, 'large')" class="text-slate-300 hover:text-white px-1.5 py-0.5 text-[10px] bg-slate-900 rounded border border-slate-600" title="Full Width">L</button>
+          <button onclick="annotateExistingImage('${side}', ${idx})" class="text-purple-300 hover:text-white px-1.5 py-0.5 text-xs bg-slate-900 rounded border border-slate-600" title="Annotate / Markup"><i class="fa-solid fa-pencil"></i></button>
+          <button onclick="triggerReplaceImage('${side}', ${idx})" class="text-indigo-300 hover:text-white px-1.5 py-0.5 text-xs bg-slate-900 rounded border border-slate-600" title="Replace Image"><i class="fa-solid fa-arrows-rotate"></i></button>
+          <button onclick="removeImageFromCard('${side}', ${idx})" class="text-rose-400 hover:text-rose-200 px-1.5 py-0.5 text-xs bg-slate-900 rounded border border-slate-600" title="Remove Image"><i class="fa-solid fa-trash"></i></button>
+        `;
+        wrapper.appendChild(actions);
+      });
+
+      return temp.innerHTML;
+    }
+
+    function triggerReplaceImage(side, imgIndex) {
+      targetImageToReplace = { side, index: imgIndex };
+      document.getElementById('imageReplaceInput').click();
+    }
+
+    function processImageReplacement(e) {
+      const file = e.target.files[0];
+      if (!file || !targetImageToReplace) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const base64Img = evt.target.result;
+        const card = appState.studyQueue[appState.studyIndex];
+        const sideKey = targetImageToReplace.side;
+        
+        const temp = document.createElement('div');
+        temp.innerHTML = card[sideKey];
+        const imgs = temp.querySelectorAll('img');
+        if (imgs[targetImageToReplace.index]) {
+          imgs[targetImageToReplace.index].src = base64Img;
+          card[sideKey] = temp.innerHTML;
+          
+          const deck = appState.decks[appState.activeStudyDeckId];
+          const origCard = deck.cards.find(c => c.id === card.id);
+          if (origCard) origCard[sideKey] = card[sideKey];
+
+          saveLocalState();
+          showStudyCard();
+        }
+        targetImageToReplace = null;
+        e.target.value = '';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeImageFromCard(side, imgIndex) {
+      if (!confirm("Are you sure you want to remove this image?")) return;
+      
+      const card = appState.studyQueue[appState.studyIndex];
+      const temp = document.createElement('div');
+      temp.innerHTML = card[side];
+      const imgs = temp.querySelectorAll('img');
+      
+      if (imgs[imgIndex]) {
+        imgs[imgIndex].remove();
+        card[side] = temp.innerHTML;
+
+        const deck = appState.decks[appState.activeStudyDeckId];
+        const origCard = deck.cards.find(c => c.id === card.id);
+        if (origCard) origCard[side] = card[side];
+
+        saveLocalState();
+        showStudyCard();
+      }
+    }
+
+    function prevCard() {
+      if (appState.studyIndex > 0) {
+        selectCardFromSidebar(appState.studyIndex - 1);
+      }
+    }
+
+    function nextCard() {
+      if (appState.studyIndex < appState.studyQueue.length - 1) {
+        selectCardFromSidebar(appState.studyIndex + 1);
+      }
+    }
+
+    
+let activeEditorId = null;
+let savedRange = null;
+
+document.addEventListener('paste', function (e) {
+    const target = e.target && e.target.nodeType === 1 ? e.target : e.target?.parentElement;
+    const editor = target && target.closest('.editor-canvas');
+    if (!editor || !e.clipboardData) return;
+
+    const clipboard = e.clipboardData;
+    const selection = window.getSelection();
+    let pasteRange = null;
+    if (selection && selection.rangeCount) {
+        const currentRange = selection.getRangeAt(0);
+        // Only use the current selection if it belongs to the editor receiving the paste.
+        if (editor.contains(currentRange.commonAncestorContainer) || currentRange.commonAncestorContainer === editor) {
+            pasteRange = currentRange.cloneRange();
+        }
+    }
+
+    // Read rich-text/plain-text clipboard formats before image handling. PowerPoint often
+    // exposes both a slide image and HTML/text; prefer the editable text when present.
+    const html = clipboard.getData('text/html');
+    const text = clipboard.getData('text/plain');
+    let clipboardHtmlHasText = false;
+    if (html) {
+        const htmlProbe = document.createElement('div');
+        htmlProbe.innerHTML = html;
+        clipboardHtmlHasText = !!(htmlProbe.textContent || '').replace(/[\s\u00a0]+/g, '').trim();
+    }
+
+    // Paste copied audio files directly into the back-card editor when the browser exposes them.
+    const audioItems = Array.from(clipboard.items || []).filter(item => item.type && item.type.startsWith('audio/'));
+    if (audioItems.length && editor.id === 'modalCardBack') {
+        e.preventDefault();
+        audioItems.forEach(item => {
+            const file = item.getAsFile();
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                insertAudioDataUrlIntoEditor(evt.target.result, editor.id, file.type);
+            };
+            reader.readAsDataURL(file);
+        });
+        return;
+    }
+
+    // Paste copied image files/screenshots directly into the editor as embedded images.
+    const imageItems = Array.from(clipboard.items || []).filter(item => item.type && item.type.startsWith('image/'));
+    // Only take the image-only path when the clipboard has no useful rich text.
+    // This prevents PowerPoint's slide preview image from replacing selectable text.
+    if (imageItems.length && !clipboardHtmlHasText && !(text || '').trim()) {
+        e.preventDefault();
+        const insertAtSavedRange = (node) => {
+            editor.focus();
+            const sel = window.getSelection();
+            if (pasteRange && sel) {
+                sel.removeAllRanges();
+                sel.addRange(pasteRange);
+            }
+            const activeSel = window.getSelection();
+            if (activeSel && activeSel.rangeCount && editor.contains(activeSel.getRangeAt(0).commonAncestorContainer)) {
+                const range = activeSel.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(node);
+                range.setStartAfter(node);
+                range.collapse(true);
+                activeSel.removeAllRanges();
+                activeSel.addRange(range);
+                pasteRange = range.cloneRange();
+            } else {
+                editor.appendChild(node);
+                pasteRange = null;
+            }
+        };
+        imageItems.forEach(item => {
+            const file = item.getAsFile();
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                const image = document.createElement('img');
+                image.src = evt.target.result;
+                image.style.maxWidth = '100%';
+                image.style.height = 'auto';
+                insertAtSavedRange(image);
+            };
+            reader.readAsDataURL(file);
+        });
+        return;
+    }
+
+    // Also support images copied from a webpage/document as HTML, plus rich-text and plain text.
+    if (html && clipboardHtmlHasText) {
+        e.preventDefault();
+        editor.focus();
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        convertFontTags(temp);
+        if (pasteRange) {
+            const sel = window.getSelection();
+            if (sel) {
+                sel.removeAllRanges();
+                sel.addRange(pasteRange);
+            }
+        }
+        document.execCommand('insertHTML', false, temp.innerHTML);
+    } else if (text) {
+        e.preventDefault();
+        editor.focus();
+        if (pasteRange) {
+            const sel = window.getSelection();
+            if (sel) {
+                sel.removeAllRanges();
+                sel.addRange(pasteRange);
+            }
+        }
+        document.execCommand('insertText', false, text);
+    }
+});
+
+// Track and save the cursor/selection range whenever it changes inside an editor
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    let node = range.commonAncestorContainer;
+    while (node) {
+      if (node.nodeType === 1 && node.classList && node.classList.contains('editor-canvas')) {
+        savedRange = range.cloneRange();
+        break;
+      }
+      node = node.parentNode;
+    }
+  }
+});
+
+// Automatically track whichever editor box the user clicks or focuses in
+document.addEventListener('focusin', (e) => {
+  if (e.target.classList && e.target.classList.contains('editor-canvas')) {
+    activeEditorId = e.target.id;
+  }
+});
+
+
+
+    
+function applyColor(color) {
+      if (!activeEditorId) return;
+      const element = document.getElementById(activeEditorId);
+      if (!element) return;
+      element.focus();
+      document.execCommand('foreColor', false, color);
+    }
+
+
+    function insertImageToEditor(event, targetId) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const editor = document.getElementById(targetId);
+        editor.focus();
+        document.execCommand('insertImage', false, evt.target.result);
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    // Audio files are embedded in the card HTML so they remain attached to the card.
+    function insertAudioFileToEditor(event, targetId) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('audio/') && !/\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(file.name)) {
+        alert('Please choose an audio file.');
+        event.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        insertAudioDataUrlIntoEditor(evt.target.result, targetId, file.type || 'audio/mpeg');
+      };
+      reader.onerror = function() { alert('Could not read this audio file.'); };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function insertAudioDataUrlIntoEditor(dataUrl, targetId, mimeType) {
+      const editor = document.getElementById(targetId);
+      if (!editor || !dataUrl) return;
+      editor.focus();
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.preload = 'metadata';
+      audio.setAttribute('aria-label', 'Card audio');
+      audio.src = dataUrl;
+      audio.style.display = 'block';
+      audio.style.maxWidth = '100%';
+      audio.style.margin = '8px 0';
+      // Insert at the current cursor when possible; otherwise append to the editor.
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount) {
+        const range = selection.getRangeAt(0);
+        if (editor.contains(range.commonAncestorContainer) || range.commonAncestorContainer === editor) {
+          range.deleteContents();
+          range.insertNode(audio);
+          range.setStartAfter(audio);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          return;
+        }
+      }
+      editor.appendChild(audio);
+    }
+
+    let backAudioRecorder = null;
+    let backAudioChunks = [];
+    let backAudioStream = null;
+
+    async function toggleBackAudioRecording() {
+      const button = document.getElementById('recordBackAudioBtn');
+      if (backAudioRecorder && backAudioRecorder.state === 'recording') {
+        backAudioRecorder.stop();
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+        alert('Audio recording is not supported in this browser. Try a recent version of Chrome or Edge over HTTPS.');
+        return;
+      }
+      try {
+        backAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        backAudioChunks = [];
+        const options = {};
+        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          options.mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/mp4')) {
+          options.mimeType = 'audio/mp4';
+        }
+        backAudioRecorder = new MediaRecorder(backAudioStream, options);
+        backAudioRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size) backAudioChunks.push(event.data);
+        };
+        backAudioRecorder.onstop = () => {
+          const blob = new Blob(backAudioChunks, { type: backAudioRecorder.mimeType || 'audio/webm' });
+          const reader = new FileReader();
+          reader.onload = (evt) => insertAudioDataUrlIntoEditor(evt.target.result, 'modalCardBack', blob.type);
+          reader.readAsDataURL(blob);
+          if (backAudioStream) backAudioStream.getTracks().forEach(track => track.stop());
+          backAudioStream = null;
+          backAudioRecorder = null;
+          backAudioChunks = [];
+          if (button) button.innerHTML = '<i class="fa-solid fa-microphone"></i> <span>Record Audio</span>';
+        };
+        backAudioRecorder.start();
+        if (button) button.innerHTML = '<i class="fa-solid fa-stop"></i> <span>Stop & Insert</span>';
+        showToast('Recording audio… click Stop & Insert when finished.');
+      } catch (error) {
+        if (backAudioStream) backAudioStream.getTracks().forEach(track => track.stop());
+        backAudioStream = null;
+        alert('Microphone access was denied or unavailable. Allow microphone access and try again.');
+      }
+    }
+
+    
+function toggleEditCurrentCard() {
+      const viewMode = document.getElementById('studyViewMode');
+      const editMode = document.getElementById('studyEditMode');
+      
+      if (viewMode.classList.contains('hidden')) {
+        viewMode.classList.remove('hidden');
+        editMode.classList.add('hidden');
+      } else {
+        const card = appState.studyQueue[appState.studyIndex];
+        document.getElementById('editCardTitleInput').value = card.title || '';
+        document.getElementById('editCardFront').innerHTML = card.front;
+        document.getElementById('editCardBack').innerHTML = card.back;
+        
+        viewMode.classList.add('hidden');
+        editMode.classList.remove('hidden');
+      }
+    }
+
+
+
+
+    
+function saveCardEdits() {
+  const newTitle = document.getElementById('editCardTitleInput').value.trim();
+  // Sanitize raw HTML to strip overlapping PPT line-heights/positioning
+  const newFront = sanitizeHtmlContent(document.getElementById('editCardFront').innerHTML);
+  const newBack = sanitizeHtmlContent(document.getElementById('editCardBack').innerHTML);
+
+  const card = appState.studyQueue[appState.studyIndex];
+  card.title = newTitle;
+  card.front = newFront;
+  card.back = newBack;
+  const deck = appState.decks[appState.activeStudyDeckId];
+  if (deck && deck.cards) {
+    const origCard = deck.cards.find(c => c.id === card.id);
+    if (origCard) {
+      origCard.title = newTitle;
+      origCard.front = newFront;
+      origCard.back = newBack;
+    }
+  }
+
+  saveLocalState();
+  renderSidebarList();
+  showStudyCard();
+  toggleEditCurrentCard();
+  showToast("Changes saved successfully!");
+}
+
+
+
+    function flipCard() {
+      document.getElementById('studyCard').classList.toggle('card-flipped');
+    }
+
+    function rateCard(rating) {
+      if (appState.studyIndex >= appState.studyQueue.length - 1) {
+        if (isImmersive) toggleImmersiveMode();
+        // Reset progress back to start upon 100% completion
+        if (appState.activeStudyDeckId && appState.decks[appState.activeStudyDeckId]) {
+          appState.decks[appState.activeStudyDeckId].lastIndex = 0;
+          saveLocalState();
+        }
+        alert("🎉 Congratulations! You completed studying this deck!");
+        exitStudy();
+      } else {
+        selectCardFromSidebar(appState.studyIndex + 1);
+      }
+    }
+
+    function exitStudy() {
+      if (isImmersive) toggleImmersiveMode();
+      switchTab('decks');
+      renderDecks();
+    }
+
+    function populateOrganizerDropdowns() {
+      const sourceSelect = document.getElementById('organizerSourceDeck');
+      const targetSelect = document.getElementById('organizerTargetDeck');
+      
+      sourceSelect.innerHTML = '<option value="ALL">All Decks</option>';
+      targetSelect.innerHTML = '';
+
+      Object.keys(appState.decks).forEach(id => {
+        const deck = appState.decks[id];
+        sourceSelect.innerHTML += `<option value="${id}">${deck.name}</option>`;
+        targetSelect.innerHTML += `<option value="${id}">${deck.name}</option>`;
+      });
+
+      renderOrganizerCards();
+    }
+
+    function renderOrganizerCards() {
+      const sourceDeckId = document.getElementById('organizerSourceDeck').value;
+      const container = document.getElementById('organizerCardList');
+      container.innerHTML = '';
+      appState.selectedCardIds.clear();
+      updateSelectedCount();
+
+      let cardsToDisplay = [];
+      Object.keys(appState.decks).forEach(deckId => {
+        if (sourceDeckId === 'ALL' || sourceDeckId === deckId) {
+          const deck = appState.decks[deckId];
+          if (deck.cards) {
+            deck.cards.forEach(c => cardsToDisplay.push({ ...c, deckName: deck.name, deckId: deck.id }));
+          }
+        }
+      });
+
+      cardsToDisplay.forEach(card => {
+        const row = document.createElement('div');
+        row.className = "p-3 flex items-center justify-between hover:bg-slate-700/40 transition";
+        row.innerHTML = `
+          <div class="flex items-center space-x-3 overflow-hidden">
+            <input type="checkbox" onchange="toggleCardSelection('${card.id}', this.checked)" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer" />
+            <div class="truncate">
+              <span class="text-xs font-semibold text-slate-200 block truncate">${card.title || card.front.replace(/<[^>]*>?/gm, '') || 'Empty Question'}</span>
+              <span class="text-[10px] text-slate-400 block truncate">${card.deckName}</span>
+            </div>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function toggleCardSelection(cardId, isChecked) {
+      if (isChecked) appState.selectedCardIds.add(cardId);
+      else appState.selectedCardIds.delete(cardId);
+      updateSelectedCount();
+    }
+
+    function toggleSelectAllCards(isChecked) {
+      document.querySelectorAll('#organizerCardList input[type="checkbox"]').forEach(cb => {
+        cb.checked = isChecked;
+        cb.dispatchEvent(new Event('change'));
+      });
+    }
+
+    function updateSelectedCount() {
+      document.getElementById('selectedCardCount').innerText = `${appState.selectedCardIds.size} Cards Selected`;
+    }
+
+    function moveSelectedCards() {
+      const targetDeckId = document.getElementById('organizerTargetDeck').value;
+      if (!targetDeckId || appState.selectedCardIds.size === 0) {
+        alert("Select at least one card and a destination deck.");
+        return;
+      }
+
+      const targetDeck = appState.decks[targetDeckId];
+      appState.selectedCardIds.forEach(cardId => {
+        Object.keys(appState.decks).forEach(deckId => {
+          const deck = appState.decks[deckId];
+          const idx = deck.cards.findIndex(c => c.id === cardId);
+          if (idx !== -1) {
+            const [movedCard] = deck.cards.splice(idx, 1);
+            if (deckId !== targetDeckId) {
+              targetDeck.cards.push(movedCard);
+            }
+          }
+        });
+      });
+
+      saveLocalState();
+      renderOrganizerCards();
+      alert("Cards moved successfully!");
+    }
+
+    function populateCreateDropdown() {
+      const select = document.getElementById('createCardDeck');
+      select.innerHTML = '';
+      Object.keys(appState.decks).forEach(id => {
+        select.innerHTML += `<option value="${id}">${appState.decks[id].name}</option>`;
+      });
+    }
+
+    function saveNewCard() {
+      const deckId = document.getElementById('createCardDeck').value;
+      const title = document.getElementById('createCardTitle').value.trim();
+      const front = sanitizeHtmlContent(document.getElementById('createCardFront').innerHTML.trim());
+      const back = sanitizeHtmlContent(document.getElementById('createCardBack').innerHTML.trim());
+
+      if (!deckId || !front) {
+        alert("Please select a deck and enter front question content.");
+        return;
+      }
+
+      const newCard = {
+        id: 'card_' + Date.now(),
+        title: title || '',
+        front: front,
+        back: back || 'N/A'
+      };
+
+      if (!appState.decks[deckId].cards) appState.decks[deckId].cards = [];
+      appState.decks[deckId].cards.push(newCard);
+
+      saveLocalState();
+      document.getElementById('createCardTitle').value = '';
+      document.getElementById('createCardFront').innerHTML = '<span style="font-weight: bold;"><br></span>';
+      document.getElementById('createCardBack').innerHTML = '<br>';
+      alert("Flashcard saved successfully!");
+      switchTab('decks');
+    } // <-- THIS CLOSING BRACE WAS MISSING AND BROKE THE SCRIPT
+
+    // --- ANKI IMPORT ENGINE ---
+    async function handleAnkiFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const progressContainer = document.getElementById('importProgress');
+      const progressBar = document.getElementById('importProgressBar');
+      const statusText = document.getElementById('importStatusText');
+      const percentText = document.getElementById('importPercent');
+
+      progressContainer.classList.remove('hidden');
+      progressBar.style.width = '10%';
+      statusText.innerText = "Extracting Anki archive...";
+      percentText.innerText = "10%";
+
+      try {
+        const zip = await JSZip.loadAsync(file);
+        progressBar.style.width = '30%';
+        statusText.innerText = "Processing media files into IndexedDB storage...";
+        percentText.innerText = "30%";
+
+        let mediaMap = {};
+        if (zip.file("media")) {
+          try {
+            const mediaContent = await zip.file("media").async("string");
+            mediaMap = JSON.parse(mediaContent);
+          } catch(e){}
+        }
+
+        let localMediaStore = {};
+        for (const [zipKey, filename] of Object.entries(mediaMap)) {
+          let zipEntry = zip.file(zipKey) || zip.file(filename);
+          if (zipEntry) {
+            const blob = await zipEntry.async("blob");
+            const base64Url = await new Promise(resolve => {
+              const reader = new FileReader();
+              reader.onload = e => resolve(e.target.result);
+              reader.readAsDataURL(blob);
+            });
+            localMediaStore[filename] = base64Url;
+            localMediaStore[zipKey] = base64Url;
+            localMediaStore[filename.toLowerCase()] = base64Url;
+            const basename = filename.split('/').pop();
+            localMediaStore[basename] = base64Url;
+            localMediaStore[basename.toLowerCase()] = base64Url;
+          }
+        }
+
+        const excludedFiles = ['collection.anki2', 'collection.anki21', 'collection.anki21b', 'media', 'meta', 'pids'];
+        for (const relativePath of Object.keys(zip.files)) {
+          if (zip.files[relativePath].dir) continue;
+          const cleanName = relativePath.split('/').pop();
+          if (excludedFiles.includes(cleanName)) continue;
+
+          const zipEntry = zip.file(relativePath);
+          if (zipEntry && !Object.values(localMediaStore).includes(relativePath)) {
+            const blob = await zipEntry.async("blob");
+            const base64Url = await new Promise(resolve => {
+              const reader = new FileReader();
+              reader.onload = e => resolve(e.target.result);
+              reader.readAsDataURL(blob);
+            });
+            localMediaStore[relativePath] = base64Url;
+            localMediaStore[cleanName] = base64Url;
+            localMediaStore[cleanName.toLowerCase()] = base64Url;
+          }
+        }
+
+        progressBar.style.width = '60%';
+        statusText.innerText = "Opening SQLite Database...";
+        percentText.innerText = "60%";
+
+        let dbBuffer = null;
+        if (zip.file("collection.anki21b")) {
+          const compressed = await zip.file("collection.anki21b").async("uint8array");
+          dbBuffer = fzstd.decompress(compressed);
+        } else if (zip.file("collection.anki21")) {
+          dbBuffer = await zip.file("collection.anki21").async("uint8array");
+        } else if (zip.file("collection.anki2")) {
+          dbBuffer = await zip.file("collection.anki2").async("uint8array");
+        }
+
+        if (!dbBuffer) {
+          throw new Error("No compatible Anki SQLite collection database found in package.");
+        }
+
+        const SQL = await initSqlJs();
+        dbInstance = new SQL.Database(dbBuffer);
+
+        progressBar.style.width = '85%';
+        statusText.innerText = "Embedding media into flashcards...";
+        percentText.innerText = "85%";
+
+        let decksMeta = {};
+        try {
+          const colResult = dbInstance.exec("SELECT decks FROM col");
+          if (colResult.length > 0) {
+            decksMeta = JSON.parse(colResult[0].values[0][0]);
+          }
+        } catch(e){}
+
+        let fieldNameToIndex = { "title": 0, "front": 1, "back": 2 };
+        try {
+          const modelsResult = dbInstance.exec("SELECT models FROM col");
+          if (modelsResult.length > 0) {
+            const modelsObj = JSON.parse(modelsResult[0].values[0][0]);
+            for (const mId in modelsObj) {
+              if (modelsObj[mId].flds) {
+                modelsObj[mId].flds.forEach(f => {
+                  const fname = f.name.toLowerCase();
+                  if (fname.includes("title")) fieldNameToIndex["title"] = f.ord;
+                  if (fname.includes("front")) fieldNameToIndex["front"] = f.ord;
+                  if (fname.includes("back")) fieldNameToIndex["back"] = f.ord;
+                });
+              }
+            }
+          }
+        } catch(e) {}
+
+        const notesResult = dbInstance.exec("SELECT id, flds FROM notes");
+        const importedCardsByDeck = {};
+
+        if (notesResult.length > 0) {
+          const rows = notesResult[0].values;
+          rows.forEach((row, idx) => {
+            const fields = row[1].split('\x1f');
+            
+            let title = '';
+            let front = '';
+            let back = '';
+
+            if (fields.length >= 3) {
+              title = fields[fieldNameToIndex["title"] ?? 0] || '';
+              front = fields[fieldNameToIndex["front"] ?? 1] || '';
+              let backIndices = [0, 1, 2].filter(i => i !== fieldNameToIndex["title"] && i !== fieldNameToIndex["front"]);
+              back = backIndices.map(i => fields[i]).filter(Boolean).join('\x1f') || fields.slice(2).join('\x1f');
+            } else if (fields.length === 2) {
+              front = fields[0] || '';
+              back = fields[1] || '';
+            } else {
+              front = fields[0] || '';
+            }
+
+            title = replaceImgSrcsWithBase64(title, localMediaStore);
+            front = replaceImgSrcsWithBase64(front, localMediaStore);
+            back = replaceImgSrcsWithBase64(back, localMediaStore);
+
+            
+// Map card to its actual internal Anki deck name if available, otherwise fallback to filename
+            let targetDeckName = file.name.replace(/\.[^/.]+$/, "");
+            try {
+              const cardMetaRes = dbInstance.exec(`SELECT did FROM cards WHERE nid = ${row[0]}`);
+              if (cardMetaRes.length > 0 && cardMetaRes[0].values.length > 0) {
+                const did = cardMetaRes[0].values[0][0];
+                if (decksMeta[did] && decksMeta[did].name) {
+                  targetDeckName = decksMeta[did].name;
+                }
+              }
+            } catch(e) {}
+
+            if (!importedCardsByDeck[targetDeckName]) {
+              importedCardsByDeck[targetDeckName] = [];
+            }
+
+            importedCardsByDeck[targetDeckName].push({
+              id: 'anki_card_' + row[0] + '_' + idx,
+              title: title.replace(/<[^>]*>?/gm, ''),
+              front: front,
+              back: back
+            });
+
+
+
+
+          });
+        }
+        
+
+
+// Prompt user to select which decks to import (bypass automatically if only 1 deck)
+        const deckNames = Object.keys(importedCardsByDeck);
+        if (deckNames.length === 0) {
+          throw new Error("No decks found in the imported file.");
+        }
+
+        const selectedDecks = await new Promise((resolve) => {
+          if (deckNames.length === 1) {
+            resolve(deckNames);
+            return;
+          }
+
+          const modalBg = document.createElement('div');
+          modalBg.className = "fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4";
+          
+          let listHtml = '';
+          deckNames.forEach((dName, idx) => {
+            const cardCount = importedCardsByDeck[dName].length;
+            listHtml += `
+              <label class="flex items-center space-x-3 p-3 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer hover:border-indigo-500 transition">
+                <input type="checkbox" value="${dName}" checked class="import-deck-cb w-4 h-4 rounded bg-slate-800 border-slate-600 text-indigo-600 focus:ring-0" />
+                <div class="flex-1 truncate">
+                  <span class="text-sm font-semibold text-white block truncate">${dName}</span>
+                  <span class="text-xs text-slate-400">${cardCount} cards</span>
+                </div>
+              </label>
+            `;
+          });
+
+          modalBg.innerHTML = `
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+              <h3 class="font-bold text-white text-base flex items-center space-x-2">
+                <i class="fa-solid fa-file-import text-indigo-400"></i>
+                <span>Select Decks to Import</span>
+              </h3>
+              <p class="text-xs text-slate-400">Choose which decks you want to add to your library:</p>
+              <div class="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                ${listHtml}
+              </div>
+              <div class="flex space-x-3 pt-2">
+                <button id="confirmImportBtn" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition shadow-md">
+                  Import Selected Decks
+                </button>
+                <button id="cancelImportBtn" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-xs font-semibold transition">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(modalBg);
+
+          modalBg.querySelector('#confirmImportBtn').onclick = () => {
+            const checked = Array.from(modalBg.querySelectorAll('.import-deck-cb:checked')).map(cb => cb.value);
+            modalBg.remove();
+            resolve(checked);
+          };
+          modalBg.querySelector('#cancelImportBtn').onclick = () => {
+            modalBg.remove();
+            resolve([]);
+          };
+        });
+
+
+
+
+        if (selectedDecks.length > 0) {
+          selectedDecks.forEach(deckName => {
+            const deckId = 'deck_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+            appState.decks[deckId] = {
+              id: deckId,
+              name: deckName,
+              category: appState.selectedCategory === 'ALL' ? 'General' : appState.selectedCategory,
+              cards: importedCardsByDeck[deckName]
+            };
+          });
+          saveLocalState();
+          renderDecks();
+          showToast("Selected decks imported successfully!");
+        }
+
+        progressBar.style.width = '100%';
+        statusText.innerText = "Import Complete!";
+        percentText.innerText = "100%";
+        
+        setTimeout(() => {
+          progressContainer.classList.add('hidden');
+          switchTab('decks');
+        }, 800);
+
+
+
+
+      } catch (err) {
+        console.error(err);
+        alert("Error importing Anki deck: " + err.message);
+        progressContainer.classList.add('hidden');
+      }
+    }
+
+    function replaceImgSrcsWithBase64(html, store) {
+      if (!html) return '';
+      return html.replace(/src=["']([^"']+)["']/g, (match, srcValue) => {
+        if (srcValue.startsWith('data:')) return match;
+
+        let decoded = srcValue;
+        try { decoded = decodeURIComponent(srcValue); } catch(e) {}
+        
+        const basename = decoded.split('/').pop().split('\\').pop().toLowerCase();
+
+        if (store[srcValue]) return `src="${store[srcValue]}"`;
+        if (store[decoded]) return `src="${store[decoded]}"`;
+        if (store[basename]) return `src="${store[basename]}"`;
+
+        for (let key in store) {
+          const lowerKey = key.toLowerCase();
+          if (lowerKey === basename || basename.includes(lowerKey) || lowerKey.includes(basename)) {
+            return `src="${store[key]}"`;
+          }
+        }
+
+        return match;
+      });
+    }
+
+    function connectFirebaseSync() {
+      const key = document.getElementById('syncUserKey').value;
+      if (key) {
+        localStorage.setItem('anki_sync_key', key);
+        document.getElementById('syncText').innerText = "Connected: " + key;
+        alert("Sync Key Connected successfully!");
+      }
+    }
+
+    function toggleAppTheme() {
+      const body = document.body;
+      const themeIcon = document.getElementById('themeIcon');
+      const themeText = document.getElementById('themeText');
+      
+      body.classList.toggle('light-mode');
+      
+      const isLight = body.classList.contains('light-mode');
+      localStorage.setItem('anki_theme', isLight ? 'light' : 'dark');
+
+      if (isLight) {
+        themeIcon.className = "fa-solid fa-moon";
+        themeText.innerText = "Dark Mode";
+      } else {
+        themeIcon.className = "fa-solid fa-sun";
+        themeText.innerText = "Light Mode";
+      }
+    }
+
+    // Restore saved theme preference on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedTheme = localStorage.getItem('anki_theme');
+      if (savedTheme === 'light') {
+        document.body.classList.add('light-mode');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeText = document.getElementById('themeText');
+        if (themeIcon) themeIcon.className = "fa-solid fa-moon";
+        if (themeText) themeText.innerText = "Dark Mode";
+      }
+    });
+// STEP 1: Focus Study Mode toggle handler
+    // STEP 2: Enhanced Focus Study Mode trigger
+    function enterFocusStudyMode() {
+      const viewerContainer = document.querySelector('.deck-viewer-container');
+      if (viewerContainer) {
+        viewerContainer.classList.add('focus-study-active');
+      }
+      document.body.classList.add('focus-study-active');
+    }
+
+// STEP 4: Ensure focus mode exits cleanly when leaving the study tab or switching decks
+    function exitFocusStudyMode() {
+      const viewerContainer = document.querySelector('.deck-viewer-container');
+      if (viewerContainer) {
+        viewerContainer.classList.remove('focus-study-active');
+      }
+      document.body.classList.remove('focus-study-active');
+    }
+// Automatically clear focus mode when exiting study sessions
+    const originalExitStudy = exitStudy;
+    exitStudy = function() {
+      exitFocusStudyMode();
+      if (typeof originalExitStudy === 'function') {
+        originalExitStudy();
+      }
+    };
+// STEP 5: Keyboard shortcut (Esc key) to exit focus study mode
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('focus-study-active')) {
+        exitFocusStudyMode();
+      }
+    });
+function updateDeckCategory(deckId, newCategory) {
+  if (appState.decks[deckId]) {
+    appState.decks[deckId].category = newCategory;
+    saveLocalState();
+    renderDecks();
+    showToast("Deck group updated successfully!");
+  }
+}
+
+  </script>
+</body>
+</html>
